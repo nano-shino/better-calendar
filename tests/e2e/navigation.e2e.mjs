@@ -66,3 +66,17 @@ test("month view lists only days with events (plus today)", async () => {
   assert.ok(days.every((d) => d.includes("Nov")), "only November days");
   await page.key("w");
 });
+
+test("the title animates only when its words change", async () => {
+  await page.eval("location.hash = '#week'; location.reload()");
+  await sleep(300);
+  await page.waitFor("document.getElementById('title').textContent === 'November 2026' && document.querySelector('.card')");
+  await page.settle();
+  const titleAnimating = () => page.eval("document.getElementById('title').getAnimations().length > 0");
+  await page.key("ArrowRight"); // Nov 22–28: still "November 2026"
+  await page.waitFor("document.querySelector('.day, .free-run')?.textContent.includes('22')");
+  assert.equal(await titleAnimating(), false);
+  await page.key("ArrowRight"); // Nov 29 – Dec 5
+  await page.waitFor("document.getElementById('title').textContent === 'Nov – Dec 2026'");
+  assert.equal(await titleAnimating(), true);
+});

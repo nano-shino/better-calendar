@@ -61,6 +61,8 @@ so changing the sample data means updating the e2e expectations.
 - The network is stubbed: Openverse API calls return a fixture and remote images
   a tiny PNG. Curated thumbnails are also on `api.openverse.org`, so the stub
   matches images first.
+- `signed-in.e2e.mjs` runs the real (non-`?mock`) boot against a fake Firebase,
+  Google sign-in and Calendar API with realistic delays: use it for loading jank.
 - `page.swipe()` holds still before lifting. A fling makes Chrome swallow the next tap.
 - Fix a UI bug together with an e2e test. For visual changes, look at the
   screenshots at all three sizes.

@@ -48,7 +48,9 @@ export const VIEWPORTS = {
   phone: { width: 390, height: 844, deviceScaleFactor: 2, mobile: true },
 };
 
-export async function launch({ viewport = "desktop", now = FIXED_NOW } = {}) {
+// `routes(url, request)` can answer any request itself: return { body, type?, status?, delay? }
+// or nothing to fall through to the default stubs.
+export async function launch({ viewport = "desktop", now = FIXED_NOW, routes = null } = {}) {
   const profile = mkdtempSync(join(tmpdir(), "bc-e2e-"));
   const proc = spawn(chromePath(), [
     "--headless=new", "--remote-debugging-port=0", "--no-first-run", "--no-default-browser-check",
@@ -89,6 +91,17 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW } = {}) {
     if (d.method === "Fetch.requestPaused") {
       const { requestId, request, resourceType } = d.params;
       try {
+        const own = routes?.(request.url, request);
+        if (own && request.method === "OPTIONS") { // CORS preflight for requests with an Authorization header
+          await send("Fetch.fulfillRequest", { requestId, responseCode: 204, responseHeaders: [{ name: "Access-Control-Allow-Origin", value: "*" }, { name: "Access-Control-Allow-Headers", value: "*" }] });
+          return;
+        }
+        if (own) {
+          if (own.delay) await sleep(own.delay);
+          const body = typeof own.body === "string" ? own.body : JSON.stringify(own.body);
+          await send("Fetch.fulfillRequest", { requestId, responseCode: own.status || 200, responseHeaders: [{ name: "Content-Type", value: own.type || "application/json" }, { name: "Access-Control-Allow-Origin", value: "*" }], body: Buffer.from(body).toString("base64") });
+          return;
+        }
         // Images first: curated thumbnails live on api.openverse.org too (/thumb/).
         if (resourceType === "Image" && !REAL_IMAGES && !request.url.startsWith("data:") && !request.url.includes("127.0.0.1")) {
           await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "image/png" }, { name: "Access-Control-Allow-Origin", value: "*" }], body: PNG.toString("base64") });
@@ -103,7 +116,7 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW } = {}) {
 
   await send("Runtime.enable");
   await send("Page.enable");
-  await send("Fetch.enable", { patterns: [{ urlPattern: "*api.openverse.org*" }, { resourceType: "Image" }] });
+  await send("Fetch.enable", { patterns: routes ? [{ urlPattern: "*" }] : [{ urlPattern: "*api.openverse.org*" }, { resourceType: "Image" }] });
   await send("Emulation.setTimezoneOverride", { timezoneId: TIMEZONE });
   await send("Emulation.setLocaleOverride", { locale: "en-US" });
   const vp = VIEWPORTS[viewport] || viewport;

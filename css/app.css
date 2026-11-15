@@ -82,7 +82,7 @@ svg { display: block; }
   display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
   padding: 14px var(--side-r) 12px var(--side);
 }
-.title { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.025em; white-space: nowrap; }
+.title { margin: 0; font-size: 22px; line-height: 1.1; letter-spacing: -0.025em; white-space: nowrap; min-height: 1.1em; }
 .t-month { font-weight: 600; }
 .t-year { font-weight: 300; color: var(--ink-3); }
 .bar-r { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -105,7 +105,7 @@ svg { display: block; }
 .seg[data-view="week"] .seg-ind { transform: translateX(72px); }
 .seg[data-view="month"] .seg-ind { transform: translateX(144px); }
 
-.acct-btn { display: flex; align-items: center; border: 0; background: none; padding: 2px 2px 2px 10px; border-radius: 999px; position: relative; }
+.acct-btn { display: flex; align-items: center; border: 0; background: none; padding: 2px 2px 2px 10px; border-radius: 999px; position: relative; min-height: 34px; }
 .av {
   position: relative; width: 30px; height: 30px; border-radius: 50%; flex: none;
   background: var(--wash-2); color: var(--ink-2); display: grid; place-items: center;

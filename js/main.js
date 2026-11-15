@@ -21,6 +21,10 @@ const S = {
   cache: new Map(),           // `${email}|${start}|${end}` -> {t, events}
   seq: 0,
   target: null,             // where navigation is heading (set before data loads)
+  shownSignedIn: null,      // whose events are on screen: scroll is kept only for the same ones
+  // Accounts from the last session, shown while Firebase restores it, so a
+  // signed-in user never sees the sample calendar flash first.
+  pending: null,
 };
 S.target = { view: S.view, anchor: S.anchor };
 
@@ -95,19 +99,20 @@ function calendarsList() {
 async function go({ view = S.target.view, anchor = S.target.anchor, kind = null, quiet = false } = {}) {
   const seq = ++S.seq;
   S.target = { view, anchor };
+  if (S.pending) { S.view = view; S.anchor = anchor; renderHeader(); return; }
   const { start, end } = rangeOf(view, anchor);
   const slow = setTimeout(() => document.body.classList.add("loading"), 180);
   const events = await eventsFor(start, end);
   clearTimeout(slow);
   if (seq !== S.seq) return;
   document.body.classList.remove("loading");
-  const sameRange = view === S.view && +rangeOf(view, anchor).start === +rangeOf(S.view, S.anchor).start && S.stage;
+  const sameRange = view === S.view && +rangeOf(view, anchor).start === +rangeOf(S.view, S.anchor).start && S.shownSignedIn === S.signedIn;
   S.view = view; S.anchor = anchor; S.events = events;
   saveJSON("bd:view", view);
   // 6: the address follows the view, so #week etc. are always bookmarkable
   if (location.hash !== `#${view}`) history.replaceState(null, "", `${location.pathname}${location.search}#${view}`);
-  const paint = () => { render(!!sameRange); S.stage = true; };
-  paint();
+  render(sameRange);
+  S.shownSignedIn = S.signedIn;
   if (kind && !quiet) animateIn(kind);
   renderBanner();
   refreshPanel(S.events);
@@ -158,6 +163,7 @@ function animateIn(kind) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   stage.firstElementChild?.classList.add(`enter-${kind}`);
   const title = $("#title");
+  if (!S.titleChanged) return; // the same words again: animating them only looks like a flicker
   title.classList.remove("enter");
   void title.offsetWidth;
   title.classList.add("enter");
@@ -180,7 +186,8 @@ function renderHeader() {
     if (start.getFullYear() !== last.getFullYear()) year = `${start.getFullYear()}–${String(last.getFullYear()).slice(2)}`;
   }
   const title = $("#title");
-  title.replaceChildren(h("span", { class: "t-month", text: month }), " ", h("span", { class: "t-year", text: year }));
+  S.titleChanged = title.textContent !== `${month} ${year}`;
+  if (S.titleChanged) title.replaceChildren(h("span", { class: "t-month", text: month }), " ", h("span", { class: "t-year", text: year }));
   $("#seg").dataset.view = S.view;
   for (const b of document.querySelectorAll("#seg [data-v]")) b.setAttribute("aria-pressed", String(b.dataset.v === S.view));
   const today = startOfDay(new Date());
@@ -190,7 +197,7 @@ function renderHeader() {
 
 function renderAvatars() {
   const btn = $("#acctBtn");
-  const accts = S.signedIn ? store.getProfile().accounts : [];
+  const accts = S.pending || (S.signedIn ? store.getProfile().accounts : []);
   btn.replaceChildren();
   if (!accts.length) { btn.append(h("span", { class: "av blank" }, icon("people"))); btn.setAttribute("aria-label", "Accounts"); return; }
   accts.slice(0, 2).forEach((a, i) => btn.append(avatar(a, i)));
@@ -227,7 +234,7 @@ function renderWelcome() {
   const card = $("#welcome");
   let dismissed = false;
   try { dismissed = sessionStorage.getItem("bd:welcome") === "0"; } catch {}
-  card.hidden = S.signedIn || dismissed;
+  card.hidden = S.signedIn || !!S.pending || dismissed;
   if (card.hidden) return;
   const close = h("button", { class: "icon-btn wc-x", type: "button", "aria-label": "Hide", onclick: () => {
     try { sessionStorage.setItem("bd:welcome", "0"); } catch {}
@@ -461,9 +468,15 @@ function wire() {
 
   store.onProfile(() => {
     if (!S.signedIn) return;
+    rememberSession();
     renderAvatars();
     if (!pop.hidden) openPop();
   });
+}
+
+function rememberSession() {
+  if (!S.signedIn) { try { localStorage.removeItem("bd:session"); } catch {} return; }
+  saveJSON("bd:session", store.getProfile().accounts.map(({ email, name, picture }) => ({ email, name, picture })));
 }
 
 // #day, #week or #month in the address opens that view (handy for bookmarks).
@@ -474,6 +487,11 @@ async function boot() {
   S.target = { view: S.view, anchor: S.anchor };
   addEventListener("hashchange", () => hashView() && setView(hashView()));
   wire();
+  const remembered = loadJSON("bd:session", null);
+  if (!MOCK && store.configured && Array.isArray(remembered) && remembered.length) {
+    S.pending = remembered;
+    document.body.classList.add("loading");
+  }
   renderWelcome();
   go({ quiet: true });
   if (MOCK) {
@@ -497,11 +515,18 @@ async function boot() {
     } else {
       S.reconnect.clear(); S.calendars.clear(); dropCache();
     }
+    rememberSession();
+    const restoring = !!S.pending;
+    S.pending = null;
     resetMemo();
     closePanel();
-    if (was !== S.signedIn || firstUser) go(firstUser ? { quiet: true } : { kind: "fade" });
+    if (was !== S.signedIn || firstUser) go(restoring || !firstUser ? { kind: "fade" } : { quiet: true });
     firstUser = false;
-  }).catch((err) => { console.error(err); toast("Firebase didn't load. Check js/config.js."); });
+  }).catch((err) => {
+    console.error(err);
+    toast("Firebase didn't load. Check js/config.js.");
+    if (S.pending) { S.pending = null; go({ kind: "fade" }); }
+  });
 }
 
 boot();

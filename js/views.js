@@ -5,22 +5,29 @@ import { photoFor, cachedPhoto, expectsPhoto } from "./photos.js";
 
 const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComponent(c))}")`;
 
+// Images already shown once. Re-renders paint them at once instead of fading
+// them in again (the photo memo is cleared whenever a photo choice changes).
+const painted = new Set();
+
 // Fades a photo into el's .ph child once it has loaded. Instant if already known.
 export function paintPhoto(el, ev, size = "thumb") {
   const ph = el.querySelector(":scope > .ph");
   if (!ph) return;
-  const apply = (p) => { ph.style.backgroundImage = size === "full" && p.url !== p.thumb ? `${cssUrl(p.url)}, ${cssUrl(p.thumb)}` : cssUrl(size === "full" ? p.url : p.thumb); };
+  const src = (p) => (size === "full" ? p.url : p.thumb);
+  const apply = (p) => { ph.style.backgroundImage = size === "full" && p.url !== p.thumb ? `${cssUrl(p.url)}, ${cssUrl(p.thumb)}` : cssUrl(src(p)); };
+  const instant = (p) => { apply(p); ph.classList.add("shown", "instant"); el.classList.remove("no-photo"); };
   const known = cachedPhoto(ev);
   if (known !== undefined) {
-    if (known) { apply(known); ph.classList.add("shown", "instant"); el.classList.remove("no-photo"); }
+    if (known) instant(known);
     else el.classList.add("no-photo");
     return;
   }
   photoFor(ev).then((p) => {
     if (!ph.isConnected) return;
     if (!p) { el.classList.add("no-photo"); return; }
+    if (painted.has(src(p))) { instant(p); return; }
     const img = new Image();
-    img.onload = () => { apply(p); requestAnimationFrame(() => ph.classList.add("shown")); };
+    img.onload = () => { painted.add(src(p)); apply(p); requestAnimationFrame(() => ph.classList.add("shown")); };
     img.onerror = () => el.classList.add("no-photo");
     img.src = size === "full" ? p.url : p.thumb;
   });
