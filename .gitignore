@@ -1,0 +1,8 @@
+node_modules/
+tests/.artifacts/
+tools/curate-photos/out/
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
