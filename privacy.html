@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy · Better Calendar</title>
+  <meta name="description" content="What Better Calendar does with your Google data.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='6' fill='%23ffffff' stroke='%2316181d' stroke-width='2'/%3E%3Crect x='3' y='5' width='26' height='8' rx='4' fill='%23ef5b4c'/%3E%3Ccircle cx='16' cy='21' r='4' fill='%2316181d'/%3E%3C/svg%3E">
+  <style>
+    :root { --bg: #ffffff; --fg: #16181d; --muted: #5d6270; --line: #e6e7ea; --accent: #ef5b4c; color-scheme: light; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg: #121317; --fg: #eceef2; --muted: #a2a7b3; --line: #2a2c33; color-scheme: dark; }
+    }
+    :root[data-theme="dark"] { --bg: #121317; --fg: #eceef2; --muted: #a2a7b3; --line: #2a2c33; color-scheme: dark; }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 42rem; margin: 0 auto; padding: 48px 16px 64px; }
+    h1 { font-size: 1.9rem; line-height: 1.2; margin: 0 0 4px; }
+    h2 { font-size: 1.1rem; margin: 2em 0 .4em; }
+    p, li { color: var(--fg); }
+    .muted { color: var(--muted); }
+    ul { padding-left: 1.2em; }
+    li { margin: .3em 0; }
+    a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+    hr { border: 0; border-top: 1px solid var(--line); margin: 2.5em 0 1.5em; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Privacy</h1>
+  <p class="muted">Better Calendar · last updated 16 November 2026</p>
+
+  <p>Better Calendar shows your Google Calendar events as a list of photo cards.
+  This page explains what it reads from your Google account, where that goes,
+  and how to remove it.</p>
+
+  <h2>What it reads from Google</h2>
+  <ul>
+    <li><strong>Your calendars and events</strong>, read-only
+      (<code>calendar.readonly</code>). It never creates, changes or deletes anything in your calendar.</li>
+    <li><strong>Your name, email address and profile picture</strong>, to show which account each calendar comes from.</li>
+  </ul>
+
+  <h2>Where your data goes</h2>
+  <ul>
+    <li><strong>Calendar events stay in your browser.</strong> Your browser fetches
+      them directly from Google, keeps them in memory while the page is open, and
+      never sends them to any server of ours.</li>
+    <li><strong>Settings sync through Google Firebase</strong>, so they follow you
+      between devices: the Google accounts you linked (name, email, picture), which
+      calendars you hid, the photos you chose for events, and photos you uploaded.
+      Only you can read them.</li>
+    <li><strong>Sign-in tokens.</strong> Short-lived access tokens are kept in your
+      browser. To keep your accounts connected without signing in every hour, a small
+      token server (on Cloudflare) stores one refresh token per linked account,
+      encrypted. It uses them only to get new access tokens for you, and never
+      reads your calendar.</li>
+    <li><strong>Photo search.</strong> When you search for a photo, the words in the
+      search box (which may start from the event's title) are sent to
+      <a href="https://openverse.org">Openverse</a> to find Creative Commons images.</li>
+  </ul>
+  <p>Nothing is sold, shared for advertising, or used to train AI models.</p>
+
+  <h2>Google API data</h2>
+  <p>Better Calendar's use and transfer of information received from Google APIs
+  adheres to the
+  <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>,
+  including the Limited Use requirements. Google data is used only to show you
+  your own calendar in this app.</p>
+
+  <h2>Removing your data</h2>
+  <ul>
+    <li><strong>Remove an account</strong> from the avatar menu. Its stored refresh
+      token is revoked at Google and deleted.</li>
+    <li><strong>Revoke access</strong> at any time from your
+      <a href="https://myaccount.google.com/connections">Google account's third-party connections</a>.</li>
+    <li><strong>Delete your saved settings and photos</strong> by asking through the
+      contact link below.</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>Questions or deletion requests:
+  <a href="https://github.com/nano-shino/better-calendar/issues">open an issue on GitHub</a>.</p>
+
+  <hr>
+  <p class="muted"><a href="./">Back to Better Calendar</a></p>
+</main>
+</body>
+</html>

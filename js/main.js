@@ -4,7 +4,7 @@ import { renderList } from "./views.js";
 import { setupPanel, openPanel, closePanel, refreshPanel, panelEvent, icon } from "./panel.js";
 import * as store from "./store.js";
 import * as google from "./google.js";
-import { googleClientId } from "./config.js";
+import { googleClientId, tokenWorkerUrl } from "./config.js";
 import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
 
@@ -262,9 +262,16 @@ async function signOut() {
   await store.signOut();
 }
 
+// One popup. With the token Worker, that same popup also connects the account
+// for background token refreshes; without it, Firebase's own popup is used.
 async function signIn() {
   try {
-    await store.signIn();
+    if (S.gis && google.workerUp()) {
+      const acct = await google.connect({ signedIn: false });
+      await store.signInWithGoogleToken(acct.googleIdToken);
+    } else {
+      await store.signIn();
+    }
     const email = store.getUser()?.email;
     if (email) { S.reconnect.delete(email); dropCache(email); }
     if (S.signedIn) go({ quiet: true });
@@ -278,7 +285,8 @@ async function reconnect(email, btn) {
   if (MOCK) { S.reconnect.delete(email); renderBanner(); renderAvatars(); if (!pop.hidden) openPop(); return; }
   try {
     const owner = store.getUser()?.email?.toLowerCase() === email.toLowerCase();
-    if (S.gis) await google.reconnect(email);
+    if (S.gis && google.workerUp()) await google.connect({ email, signedIn: true });
+    else if (S.gis) await google.reconnect(email);
     else if (owner) await store.signIn();
     else throw new Error("Add googleClientId to js/config.js to reconnect extra accounts.");
     S.reconnect.delete(email);
@@ -298,9 +306,9 @@ async function addAccount() {
   }
   if (!S.gis) { toast("Add googleClientId to js/config.js to link more Google accounts."); return; }
   try {
-    const acct = await google.linkAccount();
+    const acct = google.workerUp() ? await google.connect({ signedIn: true }) : await google.linkAccount();
     await store.update((p) => {
-      if (!p.accounts.some((a) => a.email.toLowerCase() === acct.email.toLowerCase())) p.accounts.push(acct);
+      if (!p.accounts.some((a) => a.email.toLowerCase() === acct.email.toLowerCase())) p.accounts.push({ email: acct.email, name: acct.name, picture: acct.picture });
     });
     dropCache(acct.email);
     closePop();
@@ -315,6 +323,7 @@ async function removeAccount(email) {
     p.hidden = p.hidden.filter((k) => !k.startsWith(`${email}|`));
   }).catch((err) => toast(err.message));
   google.tokens.clear(email);
+  google.disconnect(email);
   S.reconnect.delete(email);
   dropCache(email);
   S.calendars.delete(email);
@@ -505,13 +514,15 @@ async function boot() {
     return;
   }
   google.initGis(googleClientId).then((ok) => (S.gis = ok));
+  google.useWorker(tokenWorkerUrl, store.idToken);
   let firstUser = true;
   await store.init((user, err) => {
     const was = S.signedIn;
     S.signedIn = !!user;
     if (err) toast("Couldn't read your saved settings from Firestore. Check the security rules in README.");
     if (user) {
-      for (const a of store.getProfile().accounts) if (!google.tokens.get(a.email)) S.reconnect.add(a.email);
+      // With the Worker, a missing token is fetched when needed; Reconnect shows only if that fails.
+      if (!google.workerUp()) for (const a of store.getProfile().accounts) if (!google.tokens.get(a.email)) S.reconnect.add(a.email);
     } else {
       S.reconnect.clear(); S.calendars.clear(); dropCache();
     }

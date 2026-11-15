@@ -32,8 +32,9 @@ pitfalls. To use your own Firebase project, see [docs/SETUP.md](docs/SETUP.md).
 - **Accessible.** Use real buttons and links, keep focus visible, give actions
   keyboard shortcuts, and respect reduced motion.
 - **Plain words.** "Reconnect", not "Re-authenticate".
-- **Private.** Calendar data and tokens stay in the browser. Only settings
-  and uploaded photos go to Firestore.
+- **Private.** Calendar data and access tokens stay in the browser. Only settings
+  and uploaded photos go to Firestore. The token Worker holds refresh tokens,
+  encrypted, and nothing else.
 
 ## Common tasks
 

@@ -16,3 +16,8 @@ export const firebaseConfig = {
 // Firebase creates one for you: Google Cloud Console > APIs & Services > Credentials >
 // "Web client (auto created by Google Service)".
 export const googleClientId = "1030565348689-ccj4fbrm4bqdekbguq5ofm31ur8s04a0.apps.googleusercontent.com";
+
+// The token server (worker/, see docs/SETUP.md): a Cloudflare Worker such as
+// "https://better-calendar-tokens.<you>.workers.dev", or your own machine over HTTPS.
+// It keeps accounts connected in the background. Leave empty to reconnect by hand every hour.
+export const tokenWorkerUrl = "https://better-calendar-tokens.better-calendar.workers.dev";

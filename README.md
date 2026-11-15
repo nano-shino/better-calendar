@@ -7,7 +7,9 @@ Month view. It can show calendars from several Google accounts at once.
 it shows sample events.
 
 Settings and uploaded photos sync through Firebase. Calendar data and access
-tokens stay in your browser.
+tokens stay in your browser. To keep your accounts connected without signing
+in every hour, a small Cloudflare Worker keeps each account's Google refresh
+token, encrypted. It never sees your events.
 
 ## Using it
 

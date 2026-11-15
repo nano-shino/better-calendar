@@ -1,12 +1,13 @@
 # Architecture
 
-Everything runs in the browser, with no server of our own. Firestore keeps the
-settings that should follow you between devices. Calendar events are fetched
-from Google, cached in memory, and never stored.
+Everything runs in the browser. Firestore keeps the settings that should follow
+you between devices. Calendar events are fetched from Google, cached in memory,
+and never stored. The one server is an optional token Worker that keeps Google
+accounts connected (see below).
 
 ```
 index.html ─► js/main.js ─┬─► store.js   Firebase Auth + Firestore
-                          ├─► google.js  tokens per account, Calendar API
+                          ├─► google.js  tokens per account, Calendar API ─► worker/ (tokens only)
                           ├─► views.js   days → cards
                           ├─► panel.js   event panel, photo picker
                           └─► photos.js  photo for each event ─► curated.js
@@ -31,12 +32,30 @@ uses any more are deleted.
 
 ## Accounts and events
 
-- Each linked account has its own token. A 401 or a missing token raises
-  `ReauthError`, which puts the account in `S.reconnect` and shows a Reconnect button.
+- Each linked account has its own token. When it is missing or expired,
+  `google.js` asks the Worker for a new one. If that fails (or there is no
+  Worker), `ReauthError` puts the account in `S.reconnect` and shows a Reconnect button.
 - Events are cached for 5 minutes per account and range. Neighbouring ranges
   are prefetched when the browser is idle.
 - Declined events are dropped. A meeting that is in two accounts is shown once
   (deduplicated by `iCalUID + start`).
+
+## Token Worker
+
+`worker/index.js`, on Cloudflare Workers' free plan, with refresh tokens in KV
+(AES-GCM, bound to the user and account).
+
+```
+sign in:   Google code popup ─► POST /connect {code} ─► refresh token stored
+           ◄─ Google ID token ─► signInWithCredential (Firebase, no second popup)
+add/reconnect account:  same popup ─► POST /connect {code, idToken}
+expired token:          POST /token {idToken, email} ─► new access token
+remove account:         POST /disconnect ─► revoked at Google, deleted
+```
+
+`idToken` is the Firebase ID token; the Worker checks its signature and uses
+its `sub` as the user. Without a `tokenWorkerUrl`, or while the Worker is
+skipped after a failure, the old one-hour popups are used instead.
 
 ## Navigation
 

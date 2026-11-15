@@ -1,15 +1,29 @@
 // A fake signed-in backend for the real (non-?mock) code path: Firebase modules,
-// Google Identity Services and the Calendar API, each answering after a delay
-// like the real thing. Use with launch({ routes: signedIn().routes }).
+// Google Identity Services, the Calendar API and (with `worker`) the token Worker,
+// each answering after a delay like the real thing.
+// Use with launch({ routes: signedIn().routes }).
+import { readFileSync } from "node:fs";
+
+export const WORKER_URL = "https://tokens.test";
 
 const FIREBASE_APP = `export const initializeApp = (c) => ({ c });`;
 
 const FIREBASE_AUTH = `
-const user = JSON.parse(localStorage.getItem("fake:user") || "null");
+const live = (u) => u && { ...u, getIdToken: async () => "fbtok-" + u.uid };
+let user = live(JSON.parse(localStorage.getItem("fake:user") || "null"));
+let listener = null;
+window.__popups = { firebase: 0, code: 0, token: 0 };
 export const getAuth = () => ({});
-export function onAuthStateChanged(auth, cb) { setTimeout(() => cb(user), Number(localStorage.getItem("fake:authDelay") || 300)); return () => {}; }
-export class GoogleAuthProvider { addScope() {} setCustomParameters() {} static credentialFromResult() { return null; } }
-export const signInWithPopup = async () => ({ user });
+export function onAuthStateChanged(auth, cb) { listener = cb; setTimeout(() => cb(user), Number(localStorage.getItem("fake:authDelay") || 300)); return () => {}; }
+export class GoogleAuthProvider { addScope() {} setCustomParameters() {} static credentialFromResult() { return null; } static credential(idToken) { return { idToken }; } }
+export const signInWithPopup = async () => { __popups.firebase++; return { user }; };
+export async function signInWithCredential(auth, cred) {
+  const email = cred.idToken.replace("gid-", "");
+  user = live({ uid: "u", email, displayName: email, photoURL: "" });
+  localStorage.setItem("fake:user", JSON.stringify({ uid: "u", email, displayName: email, photoURL: "" }));
+  setTimeout(() => listener?.(user), 50);
+  return { user };
+}
 export const signOut = async () => {};
 `;
 
@@ -31,7 +45,12 @@ export const deleteDoc = async () => {};
 export const getDoc = (ref) => new Promise((r) => setTimeout(() => r({ exists: () => true, data: () => ({ data: localStorage.getItem("fake:upload") }) }), delay()));
 `;
 
-const GSI = `window.google = { accounts: { oauth2: { initTokenClient: () => ({ requestAccessToken() {} }), hasGrantedAllScopes: () => true } } };`;
+// The code popup "picks" fake:pick (or the login_hint) and answers like Google's popup.
+const GSI = `window.google = { accounts: { oauth2: {
+  initTokenClient: (cfg) => ({ requestAccessToken(o) { __popups.token++; setTimeout(() => cfg.callback({ access_token: "tok-" + (o.login_hint || "me@example.com"), expires_in: 3599 }), 50); } }),
+  initCodeClient: (cfg) => ({ requestCode() { __popups.code++; setTimeout(() => cfg.callback({ code: "code-" + (cfg.login_hint || localStorage.getItem("fake:pick") || "me@example.com") }), 50); } }),
+  hasGrantedAllScopes: () => true,
+} } };`;
 
 // 2x2 PNG as a data URL, standing in for an uploaded photo.
 const UPLOAD = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGNgYGBgYGBgYGBgYGBgYGAAAAQAAWlmbqsAAAAASUVORK5CYII=";
@@ -44,7 +63,10 @@ const ev = (id, title, d, from, to, extra = {}) => ({
   htmlLink: `https://www.google.com/calendar/event?eid=${id}`, ...extra,
 });
 
-export function signedIn({ apiDelay = 500, expired = [] } = {}) {
+// worker: { mode } turns on the fake token Worker. mode "ok", "limited" (429, the
+// free plan's daily limit) or "reauth" (no refresh token stored). Every request
+// it gets is pushed to the returned `workerCalls`.
+export function signedIn({ apiDelay = 500, expired = [], signedOut = false, worker = null } = {}) {
   const accounts = [
     { email: "me@example.com", name: "Me", picture: "", owner: true },
     { email: "work@example.com", name: "Work", picture: "" },
@@ -79,16 +101,35 @@ export function signedIn({ apiDelay = 500, expired = [] } = {}) {
   const setup = `(() => {
     if (sessionStorage.getItem("fake:init")) return;
     sessionStorage.setItem("fake:init", "1");
-    localStorage.setItem("fake:user", ${JSON.stringify(JSON.stringify({ uid: "u", email: "me@example.com", displayName: "Me", photoURL: "" }))});
+    if (!${signedOut}) localStorage.setItem("fake:user", ${JSON.stringify(JSON.stringify({ uid: "u", email: "me@example.com", displayName: "Me", photoURL: "" }))});
     localStorage.setItem("fake:profile", ${JSON.stringify(JSON.stringify(profile))});
     localStorage.setItem("fake:upload", ${JSON.stringify(UPLOAD)});
-    localStorage.setItem("bd:session", ${JSON.stringify(JSON.stringify(accounts.map(({ email, name, picture }) => ({ email, name, picture }))))});
+    if (!${signedOut}) localStorage.setItem("bd:session", ${JSON.stringify(JSON.stringify(accounts.map(({ email, name, picture }) => ({ email, name, picture }))))});
     for (const e of ${JSON.stringify(accounts.map((a) => a.email).filter((e) => !expired.includes(e)))})
       localStorage.setItem("bd:tok:" + e, JSON.stringify({ t: "tok-" + e, e: Date.now() + 3e6 }));
   })();`;
 
   const js = (body) => ({ body, type: "text/javascript" });
+  const workerCalls = [];
+  const config = readFileSync(new URL("../../../js/config.js", import.meta.url), "utf8")
+    .replace(/tokenWorkerUrl = ".*?"/, `tokenWorkerUrl = "${worker ? WORKER_URL : ""}"`); // never the real one
   const routes = (url, req) => {
+    if (/\/js\/config\.js(\?|$)/.test(url)) return js(config);
+    if (worker && url.startsWith(WORKER_URL)) {
+      const path = new URL(url).pathname;
+      const body = JSON.parse(req.postData || "{}");
+      workerCalls.push({ path, method: req.method, type: req.headers["Content-Type"] || "", ...body });
+      if (worker.mode === "limited") return { status: 429, body: "error code: 1027", type: "text/plain", delay: 50 };
+      if (path === "/connect") {
+        const email = body.code.replace("code-", "");
+        return { body: { email, name: email, picture: "", accessToken: `tok-${email}`, expiresIn: 3599, googleIdToken: `gid-${email}` }, delay: 100 };
+      }
+      if (path === "/token") {
+        if (worker.mode === "reauth") return { status: 401, body: { error: "reauth" }, delay: 50 };
+        return { body: { accessToken: `tok-${body.email}`, expiresIn: 3599 }, delay: 100 };
+      }
+      return { body: { ok: true }, delay: 50 };
+    }
     if (url.includes("gstatic.com/firebasejs/")) {
       if (url.endsWith("firebase-app.js")) return js(FIREBASE_APP);
       if (url.endsWith("firebase-auth.js")) return js(FIREBASE_AUTH);
@@ -96,6 +137,10 @@ export function signedIn({ apiDelay = 500, expired = [] } = {}) {
     }
     if (url.startsWith("https://accounts.google.com/gsi/client")) return js(GSI);
     if (url.startsWith("https://fonts.")) return { body: "", type: "text/css" };
+    if (url.startsWith("https://www.googleapis.com/oauth2/v3/userinfo")) {
+      const email = (req.headers.Authorization || req.headers.authorization || "").replace("Bearer tok-", "");
+      return { body: { email, name: email, picture: "" }, delay: 100 };
+    }
     const m = url.match(/googleapis\.com\/calendar\/v3\/(?:users\/me\/calendarList|calendars\/([^/]+)\/events)/);
     if (m) {
       const auth = req.headers.Authorization || req.headers.authorization || "";
@@ -108,5 +153,5 @@ export function signedIn({ apiDelay = 500, expired = [] } = {}) {
     }
     return null;
   };
-  return { routes, setup, calendars, events, profile };
+  return { routes, setup, calendars, events, profile, workerCalls };
 }

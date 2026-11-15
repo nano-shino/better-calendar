@@ -97,6 +97,16 @@ export async function signIn() {
   if (cred?.accessToken) tokens.set(result.user.email, cred.accessToken, 3600);
 }
 
+// Sign in with Google's ID token from the token Worker: no second popup.
+export async function signInWithGoogleToken(googleIdToken) {
+  if (!auth) throw new Error("Firebase isn't set up yet. Add your config to js/config.js.");
+  await fb.signInWithCredential(auth, fb.GoogleAuthProvider.credential(googleIdToken));
+}
+
+// The Firebase ID token that proves to the token Worker who is asking.
+// Firebase caches it and renews it itself (not through the Worker).
+export const idToken = () => (user?.getIdToken ? user.getIdToken() : Promise.resolve(null));
+
 export async function signOut() {
   for (const a of profile.accounts) tokens.clear(a.email);
   await fb?.signOut(auth);

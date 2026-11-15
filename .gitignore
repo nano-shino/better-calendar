@@ -6,3 +6,9 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# token server: local secrets and stored tokens
+worker/.env
+worker/tokens.json*
+worker/.wrangler/
+worker/.dev.vars
