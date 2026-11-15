@@ -99,20 +99,6 @@ export function saveJSON(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full or blocked */ }
 }
 
-// Run DOM updates inside a view transition when the browser supports it.
-export function transition(update, kind) {
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!document.startViewTransition || reduce) {
-    update();
-    return { done: Promise.resolve(), finished: Promise.resolve() };
-  }
-  const root = document.documentElement;
-  if (kind) root.dataset.vt = kind;
-  const t = document.startViewTransition(update);
-  t.finished.catch(() => {}).finally(() => { if (root.dataset.vt === kind) delete root.dataset.vt; });
-  return { done: t.updateCallbackDone.catch(() => {}), finished: t.finished.catch(() => {}) };
-}
-
 // Google event descriptions are HTML. Keep text and line breaks only.
 export function descriptionText(html) {
   if (!html) return "";

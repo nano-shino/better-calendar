@@ -9,17 +9,30 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='6' fill='%23ffffff' stroke='%2316181d' stroke-width='2'/%3E%3Crect x='3' y='5' width='26' height='8' rx='4' fill='%23ef5b4c'/%3E%3Ccircle cx='16' cy='21' r='4' fill='%2316181d'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="css/app.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="module" src="js/main.js"></script>
+  <script>
+    // If a script failed to load, say so instead of leaving a blank page.
+    setTimeout(function () {
+      var t = document.getElementById("title");
+      if (t && !t.textContent.trim() && !document.getElementById("loadFail")) {
+        var d = document.createElement("div");
+        d.id = "loadFail";
+        d.className = "load-fail";
+        d.innerHTML = 'The calendar didn\'t load. <button type="button" class="btn small" onclick="location.reload()">Reload</button>';
+        document.body.appendChild(d);
+      }
+    }, 5000);
+  </script>
 </head>
 <body>
   <header class="bar">
     <div class="bar-in">
       <h1 id="title" class="title" aria-live="polite"></h1>
 
-      <div class="seg" id="seg" role="group" aria-label="View">
+      <div class="seg" id="seg" data-view="week" role="group" aria-label="View">
         <span class="seg-ind" aria-hidden="true"></span>
         <button type="button" data-v="day" aria-pressed="false">Day</button>
         <button type="button" data-v="week" aria-pressed="false">Week</button>

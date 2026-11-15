@@ -15,7 +15,8 @@ function ev(cal, title, day, sh, sm, eh, em, extra = {}) {
     id: `s-${hash(title + dayKey(day))}`, uid: `s-${hash(title + dayKey(day))}`, seriesId: extra.series || null,
     title, description: extra.description || "", location: extra.location || "",
     start, end, allDay: false, calKey: cal.key, calName: cal.name, account: "sample", color: cal.color,
-    link: null, meet: null, attendees: extra.attendees || 0,
+    link: `https://www.google.com/calendar/event?eid=${btoa(`sample${hash(title)} sample@example.com`).replace(/=+$/, "")}`,
+    meet: null, attendees: extra.attendees || 0,
   };
 }
 function allDay(cal, title, day, days) {
@@ -45,8 +46,9 @@ export function sampleEvents(from, to) {
     if (offset === 4) out.push(
       ev(CALS.home, "Flight to Lisbon", d, 7, 15, 13, 40, { location: "City Airport" }),
       ev(CALS.home, "Seafood dinner", d, 19, 0, 21, 0, { location: "Lisbon" }),
-      allDay(CALS.home, "Trip to Portugal", d, 4),
     );
+    // The trip spans 4 days; include it whenever any of them is in range.
+    if (offset >= 4 && offset <= 7 && (offset === 4 || +d === +startOfDay(from))) out.push(allDay(CALS.home, "Trip to Portugal", addDays(today, 4), 4));
     if (offset === 5) out.push(ev(CALS.home, "Hiking in Sintra", d, 8, 0, 14, 0, { location: "Sintra" }));
     if (offset === 9) out.push(ev(CALS.life, "Concert", d, 20, 0, 22, 30, { location: "City Park" }));
     if (offset === 12) out.push(allDay(CALS.home, "Mom's birthday", d, 1));

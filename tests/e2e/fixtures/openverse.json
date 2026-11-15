@@ -1,0 +1,128 @@
+{
+ "result_count": 12,
+ "page_count": 1,
+ "page_size": 12,
+ "page": 1,
+ "results": [
+  {
+   "id": "fixture-0",
+   "title": "Fixture photo 0",
+   "url": "https://images.example.test/full-0.jpg",
+   "thumbnail": "https://images.example.test/thumb-0.jpg",
+   "creator": null,
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-0"
+  },
+  {
+   "id": "fixture-1",
+   "title": "Fixture photo 1",
+   "url": "https://images.example.test/full-1.jpg",
+   "thumbnail": "https://images.example.test/thumb-1.jpg",
+   "creator": "Photographer 1",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-1"
+  },
+  {
+   "id": "fixture-2",
+   "title": "Fixture photo 2",
+   "url": "https://images.example.test/full-2.jpg",
+   "thumbnail": "https://images.example.test/thumb-2.jpg",
+   "creator": "Photographer 2",
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-2"
+  },
+  {
+   "id": "fixture-3",
+   "title": "Fixture photo 3",
+   "url": "https://images.example.test/full-3.jpg",
+   "thumbnail": "https://images.example.test/thumb-3.jpg",
+   "creator": "Photographer 3",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-3"
+  },
+  {
+   "id": "fixture-4",
+   "title": "Fixture photo 4",
+   "url": "https://images.example.test/full-4.jpg",
+   "thumbnail": "https://images.example.test/thumb-4.jpg",
+   "creator": "Photographer 4",
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-4"
+  },
+  {
+   "id": "fixture-5",
+   "title": "Fixture photo 5",
+   "url": "https://images.example.test/full-5.jpg",
+   "thumbnail": "https://images.example.test/thumb-5.jpg",
+   "creator": "Photographer 5",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-5"
+  },
+  {
+   "id": "fixture-6",
+   "title": "Fixture photo 6",
+   "url": "https://images.example.test/full-6.jpg",
+   "thumbnail": "https://images.example.test/thumb-6.jpg",
+   "creator": "Photographer 6",
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-6"
+  },
+  {
+   "id": "fixture-7",
+   "title": "Fixture photo 7",
+   "url": "https://images.example.test/full-7.jpg",
+   "thumbnail": "https://images.example.test/thumb-7.jpg",
+   "creator": "Photographer 7",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-7"
+  },
+  {
+   "id": "fixture-8",
+   "title": "Fixture photo 8",
+   "url": "https://images.example.test/full-8.jpg",
+   "thumbnail": "https://images.example.test/thumb-8.jpg",
+   "creator": "Photographer 8",
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-8"
+  },
+  {
+   "id": "fixture-9",
+   "title": "Fixture photo 9",
+   "url": "https://images.example.test/full-9.jpg",
+   "thumbnail": "https://images.example.test/thumb-9.jpg",
+   "creator": "Photographer 9",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-9"
+  },
+  {
+   "id": "fixture-10",
+   "title": "Fixture photo 10",
+   "url": "https://images.example.test/full-10.jpg",
+   "thumbnail": "https://images.example.test/thumb-10.jpg",
+   "creator": "Photographer 10",
+   "license": "cc0",
+   "license_version": "1.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-10"
+  },
+  {
+   "id": "fixture-11",
+   "title": "Fixture photo 11",
+   "url": "https://images.example.test/full-11.jpg",
+   "thumbnail": "https://images.example.test/thumb-11.jpg",
+   "creator": "Photographer 11",
+   "license": "by",
+   "license_version": "2.0",
+   "foreign_landing_url": "https://openverse.org/image/fixture-11"
+  }
+ ]
+}

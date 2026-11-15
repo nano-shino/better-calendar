@@ -1,200 +1,171 @@
-// Month grid and the Day/Week time grid. Pure rendering: main.js owns state.
-import { h, addDays, startOfDay, startOfWeek, sameDay, minutesOf, fmt, timeRange, shortTime, DAY } from "./util.js";
-import { photoFor, cachedPhoto, ruleFor } from "./photos.js";
+// Day, Week and Month as lists: one event after another, grouped by day.
+// Events with a photo get a large photo card; the rest get a compact plain card.
+import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration } from "./util.js";
+import { photoFor, cachedPhoto, expectsPhoto } from "./photos.js";
 
 const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComponent(c))}")`;
 
 // Fades a photo into el's .ph child once it has loaded. Instant if already known.
 export function paintPhoto(el, ev, size = "thumb") {
-  const ph = el.querySelector(":scope > .ph") || el;
-  const apply = (p) => {
-    if (!p) return;
-    ph.style.backgroundImage = cssUrl(size === "full" ? p.url : p.thumb);
-  };
+  const ph = el.querySelector(":scope > .ph");
+  if (!ph) return;
+  const apply = (p) => { ph.style.backgroundImage = size === "full" && p.url !== p.thumb ? `${cssUrl(p.url)}, ${cssUrl(p.thumb)}` : cssUrl(size === "full" ? p.url : p.thumb); };
   const known = cachedPhoto(ev);
   if (known !== undefined) {
-    if (known) {
-      apply(known);
-      ph.classList.add("shown", "instant");
-      // A full-size photo may still be on its way; show the thumbnail meanwhile.
-      if (size === "full" && known.url !== known.thumb) {
-        ph.style.backgroundImage = `${cssUrl(known.url)}, ${cssUrl(known.thumb)}`;
-      }
-    }
+    if (known) { apply(known); ph.classList.add("shown", "instant"); el.classList.remove("no-photo"); }
+    else el.classList.add("no-photo");
     return;
   }
   photoFor(ev).then((p) => {
-    if (!p || !ph.isConnected) return;
+    if (!ph.isConnected) return;
+    if (!p) { el.classList.add("no-photo"); return; }
     const img = new Image();
     img.onload = () => { apply(p); requestAnimationFrame(() => ph.classList.add("shown")); };
+    img.onerror = () => el.classList.add("no-photo");
     img.src = size === "full" ? p.url : p.thumb;
   });
 }
 
-function featured(list) {
-  return list.find((e) => ruleFor(e))
-    || [...list].filter((e) => !e.allDay).sort((a, b) => (b.end - b.start) - (a.end - a.start))[0]
-    || list[0];
-}
-
+// Events that touch a day, all-day first, then by start time.
 export function eventsOn(day, events) {
   const next = addDays(day, 1);
-  return events.filter((e) => e.start < next && e.end > day && (e.allDay || e.end > e.start || sameDay(e.start, day)))
+  return events
+    .filter((e) => e.start < next && (e.end > day || (+e.end === +e.start && e.start >= day)))
     .sort((a, b) => (b.allDay - a.allDay) || (a.start - b.start) || (b.end - a.end));
 }
 
-// ---------------- Month ----------------
-export function monthGrid(anchor) {
-  const first = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
-  const start = startOfWeek(first);
-  const last = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
-  const weeks = Math.ceil((Math.round((last - start) / DAY) + 1) / 7);
-  return { start, end: addDays(start, weeks * 7), weeks };
-}
-
-export function renderMonth(anchor, events, ctx) {
-  const { start, weeks } = monthGrid(anchor);
-  const today = startOfDay(new Date());
-  const root = h("section", { class: "month", vars: { "--weeks": weeks }, "aria-label": fmt.month.format(anchor) });
-  const dow = h("div", { class: "m-dow", "aria-hidden": "true" });
-  for (let i = 0; i < 7; i++) dow.append(h("span", { text: fmt.dow.format(addDays(start, i)) }));
-  const grid = h("div", { class: "m-grid", role: "grid" });
-
-  for (let i = 0; i < weeks * 7; i++) {
-    const day = addDays(start, i);
-    const list = eventsOn(day, events);
-    const out = day.getMonth() !== anchor.getMonth();
-    const isToday = sameDay(day, today);
-    const past = day < today;
-    const label = `${fmt.long.format(day)}, ${list.length ? `${list.length} event${list.length > 1 ? "s" : ""}` : "no events"}`;
-    const cell = h("button", {
-      class: `m-cell${out ? " out" : ""}${isToday ? " today" : ""}${past ? " past" : ""}`,
-      type: "button", "aria-label": label, onclick: () => ctx.openDay(day),
-      vars: { "--i": i },
-    }, h("span", { class: "m-num" }, h("span", { text: day.getDate() === 1 ? `${fmt.monthShort.format(day)} 1` : day.getDate() })));
-
-    if (list.length) {
-      const lead = featured(list);
-      const tile = h("span", { class: "m-tile", vars: { "--c": lead.color } }, h("span", { class: "ph" }));
-      const ul = h("span", { class: "m-list" });
-      const shown = list.slice(0, 3);
-      for (const e of shown) {
-        ul.append(h("span", { class: "m-ev" },
-          e.allDay ? null : h("span", { class: "m-t", text: shortTime(e.start) }),
-          h("span", { class: "m-name", text: e.title })));
-      }
-      if (list.length > shown.length) ul.append(h("span", { class: "m-more", text: `${list.length - shown.length} more` }));
-      tile.append(ul);
-      cell.append(tile);
-      paintPhoto(tile, lead);
-    }
-    grid.append(cell);
-  }
-  root.append(dow, grid);
-  return root;
-}
-
-// ---------------- Day / Week time grid ----------------
-// Greedy column packing for overlapping events, the way paper planners do it.
-function pack(items) {
-  items.sort((a, b) => a.s - b.s || b.e - a.e);
-  let cluster = [], cols = [], clusterEnd = -1;
-  const flush = () => { cluster.forEach((it) => (it.n = cols.length)); cluster = []; cols = []; clusterEnd = -1; };
-  for (const it of items) {
-    if (cluster.length && it.s >= clusterEnd) flush();
-    const visualEnd = Math.max(it.e, it.s + 28);
-    let c = cols.findIndex((end) => end <= it.s);
-    if (c === -1) { c = cols.length; cols.push(visualEnd); } else cols[c] = visualEnd;
-    it.col = c;
-    cluster.push(it);
-    clusterEnd = Math.max(clusterEnd, visualEnd);
-  }
-  flush();
-  return items;
-}
-
-export function renderTimeline(days, events, ctx) {
+// Week, Month or Day as a list. `days` are the days in range; `mode` picks the density.
+export function renderList(days, events, ctx, mode) {
   const today = startOfDay(new Date());
   const now = new Date();
-  const root = h("section", { class: `tl${days.length === 1 ? " single" : ""}`, vars: { "--days": days.length } });
+  const root = h("section", { class: `agenda mode-${mode}` });
+  const rangeStart = days[0];
+  let shown = 0;
 
-  // Header: weekday + date numeral
-  const head = h("div", { class: "tl-head" }, h("span", { class: "tl-gutter" }));
-  for (const d of days) {
-    head.append(h("button", {
-      class: `tl-dh${sameDay(d, today) ? " today" : ""}${d < today ? " past" : ""}`, type: "button",
-      onclick: () => ctx.openDay(d), "aria-label": fmt.long.format(d),
-    }, h("span", { class: "tl-dow", text: fmt.dow.format(d) }), h("span", { class: "tl-num", text: d.getDate() })));
-  }
-
-  // All-day lane
-  const lane = h("div", { class: "tl-allday" }, h("span", { class: "tl-gutter", text: "all day" }));
-  let anyAllDay = false;
-  for (const d of days) {
-    const col = h("div", { class: "tl-adcol" });
-    for (const e of events.filter((x) => x.allDay && x.start < addDays(d, 1) && x.end > d)) {
-      anyAllDay = true;
-      const chip = h("button", { class: "ad-chip", type: "button", dataset: { id: e.id }, vars: { "--c": e.color }, onclick: (ev) => ctx.openEvent(e, ev.currentTarget) },
-        h("span", { class: "ph" }), h("span", { class: "ad-t", text: e.title }));
-      paintPhoto(chip, e);
-      col.append(chip);
+  // A repeating event gets one big photo card per range: its next occurrence
+  // (or its first, if all are past). Other occurrences become compact rows.
+  const lead = new Map();
+  if (mode !== "day") {
+    for (const e of [...events].sort((a, b) => a.start - b.start)) {
+      if (!e.seriesId) continue;
+      const cur = lead.get(e.seriesId);
+      if (!cur || (cur.end <= now && e.end > now)) lead.set(e.seriesId, e);
     }
-    lane.append(col);
   }
-  if (!anyAllDay) lane.classList.add("empty");
+  const isLead = (e) => !e.seriesId || mode === "day" || lead.get(e.seriesId)?.id === e.id;
 
-  // Hours
-  const scroller = h("div", { class: "tl-scroll" });
-  const body = h("div", { class: "tl-body" });
-  const gutter = h("div", { class: "tl-hours", "aria-hidden": "true" });
-  for (let hr = 1; hr < 24; hr++) {
-    const t = new Date(today); t.setHours(hr);
-    gutter.append(h("span", { class: "hr", vars: { "--h": hr }, text: fmt.hour.format(t) }));
+  let freeRun = [];
+  const flushFree = () => {
+    if (!freeRun.length) return;
+    const a = freeRun[0], b = freeRun[freeRun.length - 1];
+    const label = freeRun.length === 1
+      ? `${fmt.dow.format(a)} ${a.getDate()}`
+      : a.getMonth() === b.getMonth()
+        ? `${a.getDate()}–${b.getDate()} ${fmt.monthShort.format(a)}`
+        : `${fmt.monthShort.format(a)} ${a.getDate()} – ${fmt.monthShort.format(b)} ${b.getDate()}`;
+    root.append(h("div", { class: `free-run${b < today ? " past" : ""}` },
+      h("span", { class: "fr-days", text: label }), h("span", { class: "fr-txt", text: "Nothing planned" })));
+    freeRun = [];
+  };
+
+  for (const day of days) {
+    // Multi-day all-day events are listed once: on their first day in this range.
+    const list = eventsOn(day, events).filter((e) => !e.allDay || sameDay(day, e.start < rangeStart ? rangeStart : e.start));
+    const isToday = sameDay(day, today);
+    if (!list.length && !isToday) {
+      if (mode === "week") freeRun.push(day);
+      continue;
+    }
+    flushFree();
+    shown++;
+
+    const group = h("div", { class: `day${isToday ? " today" : ""}${day < today ? " past" : ""}`, dataset: { day: day.toDateString() } });
+    const head = mode === "day"
+      ? h("header", { class: "day-h" },
+        h("span", { class: "dh-num", text: day.getDate() }),
+        h("span", { class: "dh-words" },
+          h("span", { class: "dh-dow", text: isToday ? `Today · ${fmt.dowLong.format(day)}` : fmt.dowLong.format(day) }),
+          h("span", { class: "dh-mon", text: `${fmt.month.format(day)} ${day.getFullYear()}` })))
+      : h("header", { class: "day-h" },
+        h("span", { class: "dh-dow", text: isToday ? "Today" : fmt.dow.format(day) }),
+        h("span", { class: "dh-num", text: day.getDate() }),
+        h("span", { class: "dh-mon", text: fmt.monthShort.format(day) }));
+    if (mode !== "day" && ctx.openDay) {
+      head.classList.add("link");
+      head.setAttribute("role", "button");
+      head.tabIndex = 0;
+      head.setAttribute("aria-label", `Open ${fmt.long.format(day)}`);
+      head.addEventListener("click", () => ctx.openDay(day));
+      head.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); ctx.openDay(day); } });
+    }
+    const ol = h("ol", { class: "cards" });
+    // The "Now" line separates past from upcoming; a live event shows "Now" itself.
+    const hasLive = list.some((e) => !e.allDay && e.start <= now && e.end > now);
+    let nowPlaced = !isToday || hasLive;
+    for (const ev of list) {
+      if (!nowPlaced && !ev.allDay && ev.start > now) {
+        ol.append(nowMark(now));
+        nowPlaced = true;
+      }
+      ol.append(h("li", {}, card(ev, now, ctx, isLead(ev))));
+    }
+    if (!nowPlaced && list.some((e) => !e.allDay)) ol.append(nowMark(now));
+    if (!list.length) ol.append(h("li", { class: "day-empty", text: "Nothing planned today" }));
+    group.append(head, ol);
+    root.append(group);
   }
-  const cols = h("div", { class: "tl-cols" });
-  days.forEach((d, di) => {
-    const col = h("div", { class: `tl-col${sameDay(d, today) ? " today" : ""}`, vars: { "--di": di } });
-    const dayStart = d.getTime(), dayEnd = addDays(d, 1).getTime();
-    const items = events
-      .filter((e) => !e.allDay && e.start.getTime() < dayEnd && e.end.getTime() > dayStart)
-      .map((e) => {
-        const s = Math.max(e.start.getTime(), dayStart), en = Math.min(e.end.getTime(), dayEnd);
-        return { ev: e, s: (s - dayStart) / 60000, e: Math.max((en - dayStart) / 60000, (s - dayStart) / 60000 + 15) };
-      });
-    for (const it of pack(items)) col.append(block(it, ctx, now));
-    if (sameDay(d, today)) col.append(h("span", { class: "now", vars: { "--m": minutesOf(now) } }));
-    cols.append(col);
-  });
-  if (days.some((d) => sameDay(d, today))) gutter.append(h("span", { class: "now-label", vars: { "--m": minutesOf(now) }, text: fmt.time.format(now) }));
-  body.append(gutter, cols);
-  scroller.append(body);
-  root.append(head, lane, scroller);
+  flushFree();
+
+  if (!shown) {
+    root.replaceChildren(h("div", { class: "agenda-empty" },
+      h("strong", { text: mode === "day" ? "A free day" : "Nothing planned" }),
+      h("span", { text: "Events you add in Google Calendar will show up here." })));
+  }
   return root;
 }
 
-function block(it, ctx, now) {
-  const e = it.ev;
-  const mins = it.e - it.s;
-  const size = mins < 40 ? "xs" : mins < 75 ? "s" : "m";
-  const el = h("button", {
-    class: `blk ${size}${e.end < now ? " past" : ""}${e.start <= now && e.end > now ? " live" : ""}`,
-    type: "button", dataset: { id: e.id },
-    vars: { "--c": e.color, "--top": it.s, "--len": mins, "--col": it.col, "--n": it.n },
-    onclick: (ev) => ctx.openEvent(e, ev.currentTarget),
-    "aria-label": `${e.title}, ${timeRange(e.start, e.end)}`,
-  },
-  h("span", { class: "ph" }),
-  h("span", { class: "blk-in" },
-    h("span", { class: "blk-t", text: e.title }),
-    h("span", { class: "blk-time", text: size === "xs" ? fmt.time.format(e.start) : timeRange(e.start, e.end) }),
-    size === "m" && e.location ? h("span", { class: "blk-loc", text: e.location.split(",")[0] }) : null));
-  paintPhoto(el, e);
-  return el;
+function nowMark(now) {
+  return h("li", { class: "now-mark", "aria-label": `Now, ${fmt.time.format(now)}` },
+    h("span", { class: "nm-pill", text: "Now" }), h("span", { class: "nm-time", text: fmt.time.format(now) }));
 }
 
-export function updateNow(root) {
-  const m = minutesOf(new Date());
-  root.querySelectorAll(".now, .now-label").forEach((n) => n.style.setProperty("--m", m));
-  const label = root.querySelector(".now-label");
-  if (label) label.textContent = fmt.time.format(new Date());
+function whenLabel(ev) {
+  if (ev.allDay) {
+    const days = Math.round((ev.end - ev.start) / 86400000);
+    return days > 1 ? `${fmt.short.format(ev.start)} – ${fmt.short.format(addDays(ev.end, -1))}` : "All day";
+  }
+  if (!sameDay(ev.start, new Date(ev.end - 1))) return `${fmt.short.format(ev.start)}, ${fmt.time.format(ev.start)} – ${fmt.short.format(ev.end)}, ${fmt.time.format(ev.end)}`;
+  return timeRange(ev.start, ev.end);
+}
+
+// big: photo card. Otherwise a compact row, with a small thumbnail when the event has a photo.
+function card(ev, now, ctx, lead) {
+  const hasPhoto = expectsPhoto(ev);
+  const big = hasPhoto && lead;
+  const live = !ev.allDay && ev.start <= now && ev.end > now;
+  const past = ev.end <= now;
+  const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
+  const tile = !big && !thumb ? h("span", { class: "c-tile", "aria-hidden": "true", text: (ev.title.trim()[0] || "•").toUpperCase() }) : null;
+  const el = h("button", {
+    class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}`,
+    type: "button",
+    dataset: { id: ev.id },
+    vars: { "--c": ev.color, "--progress": live ? ((now - ev.start) / (ev.end - ev.start)).toFixed(3) : 0 },
+    "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}`,
+    onclick: (e) => ctx.openEvent(ev, e.currentTarget),
+  },
+  big ? h("span", { class: "ph" }) : null,
+  thumb,
+  tile,
+  h("span", { class: "c-body" },
+    h("span", { class: "c-when" },
+      live ? h("span", { class: "c-live", text: "Now" }) : null,
+      h("span", { text: whenLabel(ev) }),
+      !ev.allDay && !live ? h("span", { class: "c-dur", text: duration(ev.end - ev.start) }) : null),
+    h("span", { class: "c-title", text: ev.title }),
+    ev.location ? h("span", { class: "c-loc", text: ev.location.split("\n")[0] }) : null),
+  h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
+  if (big) paintPhoto(el, ev);
+  else if (thumb) paintPhoto(thumb, ev);
+  return el;
 }

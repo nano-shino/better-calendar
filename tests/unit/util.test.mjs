@@ -1,0 +1,29 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+
+const util = await import("../../js/util.js");
+const { sampleEvents } = await import("../../js/sample.js");
+
+test("dates: adding days and months, same-day checks", () => {
+  const d = new Date(2026, 0, 31);
+  assert.equal(util.addMonths(d, 1).getMonth(), 1, "Jan 31 + 1 month lands in February");
+  assert.equal(util.addDays(d, 1).getDate(), 1);
+  assert.ok(util.sameDay(new Date(2026, 4, 1, 1), new Date(2026, 4, 1, 23)));
+  assert.equal(util.parseLocalDate("2026-11-16").getDate(), 16);
+});
+
+test("durations and relative times read naturally", () => {
+  assert.equal(util.duration(15 * 60000), "15 min");
+  assert.equal(util.duration(60 * 60000), "1 h");
+  assert.equal(util.duration(95 * 60000), "1 h 35 min");
+  assert.equal(util.relative(30 * 60000), "in 30 min");
+});
+
+test("sample events cover a whole week, with repeats sharing a series id", () => {
+  const start = new Date(2026, 10, 15);
+  const events = sampleEvents(start, util.addDays(start, 7));
+  const standups = events.filter((e) => e.title === "Team standup");
+  assert.equal(standups.length, 5);
+  assert.ok(standups.every((e) => e.seriesId === "s-standup"));
+  assert.ok(events.every((e) => e.end >= e.start));
+});

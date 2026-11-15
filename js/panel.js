@@ -1,55 +1,123 @@
-// Event detail sheet with the photo picker. Opens by morphing the event's photo.
-import { h, $, fmt, timeRange, duration, descriptionText, linkify, transition, addDays, sameDay } from "./util.js";
+// Event detail sheet with the photo picker. The event's photo flies into it.
+import { h, $, fmt, timeRange, duration, descriptionText, linkify, addDays, sameDay } from "./util.js";
 import { paintPhoto } from "./views.js";
-import { photoFor, ruleFor, autoQuery, search, choose, clearChoice, upload, wordsOf } from "./photos.js";
+import { photoFor, ruleFor, autoQuery, search, choose, clearChoice, upload, wordsOf, themeFor, expectsPhoto } from "./photos.js";
+import { getProfile } from "./store.js";
 
 let panel, scrim, current = null, ctx = null;
+let openedAt = 0;
+let expandedFor = null; // event id whose photo grid the viewer expanded
 
 export function setupPanel(context) {
   ctx = context;
   panel = $("#panel");
   scrim = $("#scrim");
-  scrim.addEventListener("click", closePanel);
+  scrim.addEventListener("click", (e) => {
+    // Ignore the second half of a double-click that opened the panel.
+    if (e.detail > 1 || performance.now() - openedAt < 350) return;
+    closePanel();
+  });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && current) { e.preventDefault(); closePanel(); } });
 }
 
 export const panelEvent = () => current;
 
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+let flight = null;
+let closeTimer = 0;
+
+// Flies a copy of a photo from one box to another. It ignores the pointer, so
+// nothing on the page is blocked while it moves.
+// fadeOut: dissolve into the destination at the end (used when the card underneath
+// already shows the same photo and its text).
+function fly(fromEl, toBox, image, radiusFrom, radiusTo, done, fadeOut = false) {
+  flight?.cancel();
+  const a = fromEl.getBoundingClientRect();
+  const clone = h("div", { class: "fly", style: {
+    left: "0px", top: "0px", width: `${a.width}px`, height: `${a.height}px`, backgroundImage: image,
+  } });
+  document.body.append(clone);
+  const from = { transform: `translate(${a.left}px, ${a.top}px)`, width: `${a.width}px`, height: `${a.height}px`, borderRadius: radiusFrom, opacity: 1 };
+  const to = { transform: `translate(${toBox.left}px, ${toBox.top}px)`, width: `${toBox.width}px`, height: `${toBox.height}px`, borderRadius: radiusTo, opacity: 1 };
+  const frames = fadeOut ? [from, { ...to, offset: 0.7 }, { ...to, opacity: 0 }] : [from, to];
+  const anim = clone.animate(frames, { duration: fadeOut ? 520 : 460, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" });
+  flight = { cancel: () => { anim.cancel(); clone.remove(); done?.(); } };
+  anim.finished.then(() => { clone.remove(); flight = null; done?.(); }, () => {});
+}
+
+// Where the panel's photo will sit once the panel has finished sliding in.
+function heroBox() {
+  const photo = $(".pv-photo", panel);
+  const left = panel.offsetLeft + photo.offsetLeft;
+  const top = panel.offsetTop + photo.offsetTop;
+  return { left, top, width: photo.offsetWidth, height: photo.offsetHeight };
+}
+
 export function openPanel(ev, sourceEl) {
+  clearTimeout(closeTimer);
   const srcPh = sourceEl?.querySelector(":scope > .ph.shown");
   const wasOpen = !!current;
-  if (srcPh && !wasOpen) srcPh.style.viewTransitionName = "hero";
-  let hero = null;
-  const t = transition(() => {
-    if (srcPh) srcPh.style.viewTransitionName = "";
-    current = ev;
-    build(ev);
-    panel.hidden = false;
-    scrim.hidden = false;
-    document.body.classList.add("panel-open");
-    hero = srcPh ? $(".pv-photo > .ph", panel) : null;
-    if (hero) hero.style.viewTransitionName = "hero";
-  }, wasOpen ? "swap" : "open");
-  t.done.then(() => $(".pv-close", panel)?.focus({ preventScroll: true }));
-  t.finished.then(() => { if (hero) hero.style.viewTransitionName = ""; });
+  if (current?.id !== ev.id) expandedFor = null;
+  current = ev;
+  openedAt = performance.now();
+  build(ev);
+  panel.classList.remove("closing");
+  scrim.classList.remove("closing");
+  panel.hidden = false;
+  scrim.hidden = false;
+  document.body.classList.add("panel-open");
+  setInert(true);
+  if (!wasOpen) {
+    panel.classList.remove("opening"); void panel.offsetWidth; panel.classList.add("opening");
+  }
+  $(".pv-close", panel)?.focus({ preventScroll: true });
+  if (srcPh && !wasOpen && !reduceMotion()) {
+    const hero = $(".pv-photo > .ph", panel);
+    hero.style.visibility = "hidden";
+    const r = getComputedStyle(panel).borderTopLeftRadius;
+    fly(srcPh, heroBox(), getComputedStyle(srcPh).backgroundImage, "18px", `${r} ${r} 0 0`, () => { hero.style.visibility = ""; });
+  }
 }
 
 export function closePanel() {
   if (!current) return;
   const id = current.id;
-  const hero = $(".pv-photo > .ph", panel);
-  if (hero) hero.style.viewTransitionName = "hero";
-  let target = null;
-  const t = transition(() => {
-    if (hero) hero.style.viewTransitionName = "";
+  current = null;
+  document.body.classList.remove("panel-open");
+  setInert(false);
+  const card = document.querySelector(`#stage [data-id="${CSS.escape(id)}"]`);
+  card?.focus({ preventScroll: true });
+
+  // The photo flies back to its card when that card is on screen.
+  const hero = $(".pv-photo > .ph.shown", panel);
+  const target = card?.querySelector(":scope > .ph.shown");
+  if (hero && target && !reduceMotion()) {
+    const r = target.getBoundingClientRect();
+    if (r.bottom > 0 && r.top < innerHeight) {
+      const pr = getComputedStyle(panel).borderTopLeftRadius;
+      fly(hero, { left: r.left, top: r.top, width: r.width, height: r.height }, getComputedStyle(hero).backgroundImage, `${pr} ${pr} 0 0`, "18px", null, true);
+      hero.style.visibility = "hidden";
+    }
+  }
+  // Fade out without blocking the page: the panel and scrim ignore the pointer while they go.
+  panel.classList.remove("opening");
+  panel.classList.add("closing");
+  scrim.classList.add("closing");
+  closeTimer = setTimeout(() => {
+    if (current) return;
     panel.hidden = true;
     scrim.hidden = true;
-    document.body.classList.remove("panel-open");
-    current = null;
-    target = document.querySelector(`#stage [data-id="${CSS.escape(id)}"] > .ph.shown`);
-    if (target) target.style.viewTransitionName = "hero";
-  }, "close");
-  t.finished.then(() => { if (target) target.style.viewTransitionName = ""; });
+    panel.classList.remove("closing");
+    scrim.classList.remove("closing");
+  }, reduceMotion() ? 0 : 300);
+}
+
+// Everything behind the open sheet is taken out of tab order and clicks.
+function setInert(on) {
+  for (const sel of [".bar", "#banner", "#stage", "#welcome"]) {
+    const el = document.querySelector(sel);
+    if (el) el.inert = on;
+  }
 }
 
 // Re-render the open panel after data changes, without animation.
@@ -70,19 +138,23 @@ function whenText(ev) {
 }
 
 function sourceLabel(ev, rule) {
-  if (!rule) return "Picked automatically from the title";
+  if (!rule) {
+    const theme = themeFor(ev);
+    if (theme && getProfile().autoPhotos !== false) return `Automatic, because the title says “${theme.label}”`;
+    return "No photo yet. Pick one below.";
+  }
   if (rule.scope === "event") return "You chose this for this event";
   if (rule.scope === "series") return "You chose this for every repeat";
   return `Matches your keyword “${rule.word}”`;
 }
 
-function build(ev, keepScroll) {
+function build(ev, keepScroll, message = "") {
   const scrollTop = keepScroll ? $(".pv-scroll", panel)?.scrollTop : 0;
   const rule = ruleFor(ev);
   const [line1, line2] = whenText(ev);
 
   const credit = h("a", { class: "pv-credit", target: "_blank", rel: "noopener", hidden: true });
-  const photo = h("div", { class: "pv-photo", vars: { "--c": ev.color } },
+  const photo = h("div", { class: `pv-photo${expectsPhoto(ev) ? "" : " is-empty"}`, vars: { "--c": ev.color } },
     h("span", { class: "ph" }),
     h("button", { class: "pv-close", type: "button", "aria-label": "Close", onclick: closePanel }, icon("close")),
     credit);
@@ -100,19 +172,36 @@ function build(ev, keepScroll) {
     ev.meet ? h("p", { class: "pv-row" }, icon("video"), h("a", { href: ev.meet, target: "_blank", rel: "noopener", text: "Join video call" })) : null,
     ev.attendees > 1 ? h("p", { class: "pv-row" }, icon("people"), h("span", { text: `${ev.attendees} guests` })) : null,
     desc ? h("div", { class: "pv-desc" }, linkify(desc)) : null,
-    ev.link ? h("a", { class: "pv-open", href: ev.link, target: "_blank", rel: "noopener", text: "Open in Google Calendar" }) : null,
+    googleLinks(ev),
   );
 
-  const picker = buildPicker(ev, rule, photo, credit);
+  const picker = buildPicker(ev, rule, photo, credit, message);
   const scroll = h("div", { class: "pv-scroll" }, photo, details, picker);
   panel.replaceChildren(scroll);
   panel.setAttribute("aria-labelledby", "pvTitle");
   if (keepScroll) scroll.scrollTop = scrollTop;
 }
 
+// Links into Google Calendar for the account that owns the event. The API's
+// htmlLink has no account in it, so with several accounts it can open the wrong one.
+function googleLinks(ev) {
+  if (!ev.link) return null;
+  let eid = "";
+  const m = /[?&]eid=([^&#]+)/.exec(ev.link);
+  if (m) { try { eid = decodeURIComponent(m[1]); } catch { eid = m[1]; } }
+  if (!eid) return h("div", { class: "pv-links" }, h("a", { class: "btn small", href: ev.link, target: "_blank", rel: "noopener", text: "Open in Google Calendar" }));
+  const user = ev.account && ev.account.includes("@") ? `authuser=${encodeURIComponent(ev.account)}` : "";
+  const edit = `https://calendar.google.com/calendar/r/eventedit/${encodeURIComponent(eid)}${user ? `?${user}` : ""}`;
+  const view = `https://calendar.google.com/calendar/event?eid=${encodeURIComponent(eid)}${user ? `&${user}` : ""}`;
+  return h("div", { class: "pv-links" },
+    h("a", { class: "btn small", href: edit, target: "_blank", rel: "noopener", text: "Edit in Google Calendar" }),
+    h("a", { class: "link-btn", href: view, target: "_blank", rel: "noopener", text: "View" }));
+}
+
 function setCredit(el, p) {
   if (p?.credit) {
-    el.textContent = p.credit.license ? `${p.credit.by} · ${p.credit.license}` : p.credit.by;
+    const by = p.credit.by && p.credit.by !== "Unknown" ? p.credit.by : "";
+    el.textContent = [by, p.credit.license].filter(Boolean).join(" · ") || "Photo credit";
     el.href = p.credit.link;
     el.hidden = false;
   } else if (p?.mine) {
@@ -122,7 +211,7 @@ function setCredit(el, p) {
   } else el.hidden = true;
 }
 
-function buildPicker(ev, rule, photo, credit) {
+function buildPicker(ev, rule, photo, credit, message = "") {
   const word0 = rule?.word || wordsOf(ev.title)[0] || ev.title.toLowerCase();
   const initial = rule?.scope || (ev.seriesId ? "series" : "event");
   const keyword = h("input", { class: "kw-input", id: "kwInput", type: "text", value: word0, "aria-label": "Keyword", autocomplete: "off", spellcheck: "false" });
@@ -137,7 +226,7 @@ function buildPicker(ev, rule, photo, credit) {
   keyword.addEventListener("focus", () => { $("#scope-keyword", scope).checked = true; });
 
   const getScope = () => $('input[name="scope"]:checked', scope)?.value || "event";
-  const status = h("p", { class: "pk-status", role: "status" });
+  const status = h("p", { class: "pk-status", role: "status", text: message });
 
   async function apply(pickPromise) {
     const s = getScope();
@@ -149,10 +238,12 @@ function buildPicker(ev, rule, photo, credit) {
       status.textContent = ctx.signedIn() ? "Saved" : "Saved for now. Sign in to keep it.";
       const fresh = h("span", { class: "ph" });
       photo.querySelector(".ph").replaceWith(fresh);
+      photo.classList.remove("is-empty");
       paintPhoto(photo, ev, "full");
       photoFor(ev).then((p) => setCredit(credit, p));
       ctx.changed();
-      setTimeout(() => current?.id === ev.id && build(ev, true), 650);
+      const saved = status.textContent;
+      setTimeout(() => current?.id === ev.id && build(ev, true, saved), 650);
     } catch (err) {
       status.textContent = err.message;
     }
@@ -160,12 +251,24 @@ function buildPicker(ev, rule, photo, credit) {
 
   // Suggestions
   const q = h("input", { type: "search", id: "pkQuery", class: "pk-q", value: autoQuery(ev), placeholder: "Search photos", autocomplete: "off", "aria-label": "Search photos" });
-  const results = h("div", { class: "pk-grid" });
+  const results = h("div", { class: `pk-grid${expandedFor === ev.id ? "" : " collapsed"}` });
+  const more = h("button", { type: "button", class: "link-btn pk-more", hidden: true, text: "More photos", onclick: () => {
+    expandedFor = ev.id;
+    results.classList.remove("collapsed");
+    more.hidden = true;
+    results.querySelectorAll(".pk-item")[3]?.focus();
+  } });
   const preview = (r) => { const ph = photo.querySelector(".ph"); ph.style.backgroundImage = `url("${r.thumb}")`; ph.classList.add("shown"); };
-  const restore = () => { photo.querySelector(".ph").style.backgroundImage = ""; paintPhoto(photo, ev, "full"); };
+  const restore = () => {
+    const ph = photo.querySelector(".ph");
+    ph.style.backgroundImage = "";
+    if (!expectsPhoto(ev)) ph.classList.remove("shown");
+    paintPhoto(photo, ev, "full");
+  };
   async function runSearch() {
     const term = q.value.trim();
-    results.replaceChildren(...Array.from({ length: 9 }, () => h("span", { class: "pk-skel" })));
+    results.replaceChildren(...Array.from({ length: results.classList.contains("collapsed") ? 3 : 9 }, () => h("span", { class: "pk-skel" })));
+    more.hidden = true;
     try {
       const list = term ? await search(term, 12) : [];
       results.replaceChildren();
@@ -178,6 +281,7 @@ function buildPicker(ev, rule, photo, credit) {
         b.addEventListener("click", () => apply(async () => ({ type: "url", url: r.url, thumb: r.thumb, credit: r.credit })));
         results.append(b);
       });
+      more.hidden = !results.classList.contains("collapsed") || list.length <= 3;
     } catch (err) {
       results.replaceChildren(h("p", { class: "pk-empty", text: err.message }));
     }
@@ -188,7 +292,11 @@ function buildPicker(ev, rule, photo, credit) {
   const file = h("input", { type: "file", accept: "image/*", id: "pkFile", class: "visually-hidden" });
   const drop = h("label", { class: "pk-drop", for: "pkFile" },
     icon("image"), h("span", {}, h("strong", { text: "Upload a photo" }), h("span", { class: "sub", text: "Drop, paste or choose a file" })));
-  const take = (f) => f && f.type.startsWith("image/") && apply(() => upload(f));
+  const take = (f) => {
+    if (!f) return;
+    if (!f.type.startsWith("image/")) { status.textContent = "That file isn't an image. Choose a JPG, PNG or similar."; return; }
+    apply(() => upload(f));
+  };
   file.addEventListener("change", () => take(file.files[0]));
   drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("over"); });
   drop.addEventListener("dragleave", () => drop.classList.remove("over"));
@@ -197,7 +305,7 @@ function buildPicker(ev, rule, photo, credit) {
 
   const reset = rule ? h("button", { type: "button", class: "link-btn", text: "Use the automatic photo", onclick: async () => {
     status.textContent = "Saving…";
-    try { await clearChoice(ev); ctx.changed(); build(ev, true); } catch (err) { status.textContent = err.message; }
+    try { await clearChoice(ev); ctx.changed(); build(ev, true, "Back to the automatic photo"); } catch (err) { status.textContent = err.message; }
   } }) : null;
 
   const section = h("section", { class: "picker", "aria-label": "Photo" },
@@ -205,6 +313,7 @@ function buildPicker(ev, rule, photo, credit) {
     scope,
     h("div", { class: "pk-search" }, icon("search"), q),
     results,
+    more,
     file, drop,
     h("div", { class: "pk-foot" }, status, reset),
     h("p", { class: "fine", text: "Suggested photos come from Openverse and are Creative Commons licensed." }));

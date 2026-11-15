@@ -8,7 +8,7 @@ import { tokens, CAL_SCOPE } from "./google.js";
 const V = "12.18.0";
 const CDN = `https://www.gstatic.com/firebasejs/${V}`;
 
-const blankProfile = () => ({ accounts: [], hidden: [], rules: { event: {}, series: {}, keywords: [] }, view: null });
+const blankProfile = () => ({ accounts: [], hidden: [], rules: { event: {}, series: {}, keywords: [] }, view: null, autoPhotos: true });
 
 export const configured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
@@ -36,6 +36,7 @@ function sanitize(p) {
       keywords: Array.isArray(p?.rules?.keywords) ? p.rules.keywords : [],
     },
     view: p?.view || null,
+    autoPhotos: p?.autoPhotos !== false,
   };
 }
 
@@ -77,6 +78,13 @@ export async function init(onUser) {
       if (first) { first = false; onUser(u, err); }
     });
   });
+}
+
+// Test mode: pretend to be signed in, keep everything in memory.
+export function useMock(p) {
+  user = p ? { uid: "mock", email: p.accounts[0].email, displayName: p.accounts[0].name } : null;
+  profile = p ? sanitize(p) : blankProfile();
+  emit();
 }
 
 export async function signIn() {

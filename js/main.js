@@ -1,6 +1,6 @@
 // App shell: header, navigation, data loading, accounts.
-import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, transition, loadJSON, saveJSON } from "./util.js";
-import { renderMonth, renderTimeline, monthGrid, updateNow } from "./views.js";
+import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, loadJSON, saveJSON } from "./util.js";
+import { renderList } from "./views.js";
 import { setupPanel, openPanel, closePanel, refreshPanel, panelEvent, icon } from "./panel.js";
 import * as store from "./store.js";
 import * as google from "./google.js";
@@ -8,10 +8,10 @@ import { googleClientId } from "./config.js";
 import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
 
-const mobile = matchMedia("(max-width: 720px)");
+
 
 const S = {
-  view: loadJSON("bd:view", null) || (mobile.matches ? "day" : "week"),
+  view: ["day", "week", "month"].includes(loadJSON("bd:view", null)) ? loadJSON("bd:view", null) : "week",
   anchor: startOfDay(new Date()),
   events: [],
   calendars: new Map(),       // account email -> calendar list
@@ -20,22 +20,26 @@ const S = {
   gis: false,
   cache: new Map(),           // `${email}|${start}|${end}` -> {t, events}
   seq: 0,
+  target: null,             // where navigation is heading (set before data loads)
 };
+S.target = { view: S.view, anchor: S.anchor };
 
 const stage = $("#stage");
 
 // ---------------- ranges ----------------
 function rangeOf(view, anchor) {
-  if (view === "month") { const g = monthGrid(anchor); return { start: g.start, end: g.end }; }
+  if (view === "month") {
+    const s = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    return { start: s, end: new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1) };
+  }
   if (view === "day") return { start: anchor, end: addDays(anchor, 1) };
-  if (mobile.matches) return { start: anchor, end: addDays(anchor, 3) };
   const s = startOfWeek(anchor);
   return { start: s, end: addDays(s, 7) };
 }
 function shift(view, anchor, dir) {
   if (view === "month") return addMonths(anchor, dir);
   if (view === "day") return addDays(anchor, dir);
-  return addDays(anchor, dir * (mobile.matches ? 3 : 7));
+  return addDays(anchor, dir * 7);
 }
 
 // ---------------- data ----------------
@@ -65,8 +69,11 @@ async function accountEvents(email, start, end) {
   }
 }
 
+// ?mock in the address: fake signed-in state with two accounts, for UI testing.
+const MOCK = new URLSearchParams(location.search).has("mock");
+
 async function eventsFor(start, end) {
-  if (!S.signedIn) return sampleEvents(start, end);
+  if (!S.signedIn || MOCK) return sampleEvents(start, end);
   const lists = await Promise.all(store.getProfile().accounts.map((a) => accountEvents(a.email, start, end)));
   // The same meeting can show up in several of your accounts. Keep one.
   const seen = new Set();
@@ -80,23 +87,28 @@ async function eventsFor(start, end) {
 
 function calendarsList() {
   if (!S.signedIn) return [{ account: "Sample calendars", cals: sampleCalendars }];
+  if (MOCK) return store.getProfile().accounts.map((a, i) => ({ account: a.email, cals: i === 0 ? sampleCalendars.slice(1) : i === 1 ? sampleCalendars.slice(0, 1) : [] }));
   return store.getProfile().accounts.map((a) => ({ account: a.email, cals: S.calendars.get(a.email) || [] }));
 }
 
 // ---------------- navigation ----------------
-async function go({ view = S.view, anchor = S.anchor, kind = null, quiet = false } = {}) {
+async function go({ view = S.target.view, anchor = S.target.anchor, kind = null, quiet = false } = {}) {
   const seq = ++S.seq;
+  S.target = { view, anchor };
   const { start, end } = rangeOf(view, anchor);
   const slow = setTimeout(() => document.body.classList.add("loading"), 180);
   const events = await eventsFor(start, end);
   clearTimeout(slow);
   if (seq !== S.seq) return;
   document.body.classList.remove("loading");
-  const viewChanged = view !== S.view;
+  const sameRange = view === S.view && +rangeOf(view, anchor).start === +rangeOf(S.view, S.anchor).start && S.stage;
   S.view = view; S.anchor = anchor; S.events = events;
   saveJSON("bd:view", view);
-  const paint = () => render(viewChanged);
-  if (quiet || !kind) paint(); else transition(paint, kind);
+  // 6: the address follows the view, so #week etc. are always bookmarkable
+  if (location.hash !== `#${view}`) history.replaceState(null, "", `${location.pathname}${location.search}#${view}`);
+  const paint = () => { render(!!sameRange); S.stage = true; };
+  paint();
+  if (kind && !quiet) animateIn(kind);
   renderBanner();
   refreshPanel(S.events);
   if (S.signedIn) prefetch(view, anchor);
@@ -109,58 +121,53 @@ function prefetch(view, anchor) {
   });
 }
 
-const nav = (dir) => go({ anchor: shift(S.view, S.anchor, dir), kind: dir > 0 ? "next" : "prev" });
+const nav = (dir) => go({ anchor: shift(S.target.view, S.target.anchor, dir), kind: dir > 0 ? "next" : "prev" });
 const goToday = () => {
   const today = startOfDay(new Date());
   const { start, end } = rangeOf(S.view, S.anchor);
-  const kind = today < start ? "prev" : today >= end ? "next" : null;
-  go({ anchor: today, kind });
-  if (!kind) scrollToNow(true);
+  const inRange = today >= start && today < end;
+  if (inRange && S.view !== "day") { scrollToToday(true); return; }
+  go({ anchor: today, kind: today < start ? "prev" : today >= end ? "next" : null });
 };
-const setView = (view, anchor = S.anchor) => {
-  if (view === S.view && sameDay(anchor, S.anchor)) return;
+const setView = (view, anchor = S.target.anchor) => {
+  const from = S.target.view;
+  if (view === from && sameDay(anchor, S.target.anchor)) return;
   const order = { day: 0, week: 1, month: 2 };
-  go({ view, anchor, kind: order[view] < order[S.view] ? "zoom-in" : order[view] > order[S.view] ? "zoom-out" : null });
+  go({ view, anchor, kind: order[view] < order[from] ? "zoom-in" : order[view] > order[from] ? "zoom-out" : "fade" });
 };
 
 // ---------------- rendering ----------------
-let lastScroll = null;
-
-function render(viewChanged) {
-  const oldScroller = $(".tl-scroll", stage);
-  if (oldScroller) lastScroll = oldScroller.scrollTop;
+// keepScroll: re-render in place (data refresh, filters). Otherwise a new range
+// starts at today when it is in view, or at the top.
+function render(keepScroll) {
+  const prevScroll = stage.scrollTop;
   const events = S.events.filter(visible);
   const ctx = { openEvent: (e, el) => openPanel(e, el), openDay: (d) => setView("day", startOfDay(d)) };
-
-  let view;
-  if (S.view === "month") view = renderMonth(S.anchor, events, ctx);
-  else {
-    const { start, end } = rangeOf(S.view, S.anchor);
-    const days = [];
-    for (let d = start; d < end; d = addDays(d, 1)) days.push(d);
-    view = renderTimeline(days, events, ctx);
-  }
-  stage.replaceChildren(view);
+  const { start, end } = rangeOf(S.view, S.anchor);
+  const days = [];
+  for (let d = start; d < end; d = addDays(d, 1)) days.push(d);
+  stage.replaceChildren(renderList(days, events, ctx, S.view));
   stage.dataset.view = S.view;
-
-  const scroller = $(".tl-scroll", stage);
-  if (scroller) {
-    if (lastScroll == null || viewChanged) scrollToNow(false);
-    else scroller.scrollTop = lastScroll;
-  }
+  if (keepScroll) stage.scrollTop = prevScroll;
+  else scrollToToday(false);
   renderHeader();
 }
 
-function scrollToNow(smooth) {
-  const scroller = $(".tl-scroll", stage);
-  if (!scroller) return;
-  const hourPx = parseFloat(getComputedStyle(stage).getPropertyValue("--hour")) || 52;
-  const { start, end } = rangeOf(S.view, S.anchor);
-  const now = new Date();
-  const showsToday = now >= start && now < end;
-  const firstEvent = S.events.filter((e) => !e.allDay && visible(e)).map((e) => e.start.getHours() + e.start.getMinutes() / 60).sort((a, b) => a - b)[0];
-  const hour = showsToday ? now.getHours() + now.getMinutes() / 60 - 1.5 : Math.min(firstEvent ?? 8, 8) - 0.5;
-  scroller.scrollTo({ top: Math.max(0, hour * hourPx), behavior: smooth ? "smooth" : "instant" });
+// Slide/fade the new list and title in. No overlay, so clicks keep working mid-animation.
+function animateIn(kind) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  stage.firstElementChild?.classList.add(`enter-${kind}`);
+  const title = $("#title");
+  title.classList.remove("enter");
+  void title.offsetWidth;
+  title.classList.add("enter");
+}
+
+function scrollToToday(smooth) {
+  const today = $(".day.today", stage);
+  if (!today || S.view === "day") { stage.scrollTo({ top: 0, behavior: smooth ? "smooth" : "instant" }); return; }
+  const top = today.offsetTop - 8;
+  stage.scrollTo({ top: Math.max(0, top), behavior: smooth ? "smooth" : "instant" });
 }
 
 function renderHeader() {
@@ -177,7 +184,7 @@ function renderHeader() {
   $("#seg").dataset.view = S.view;
   for (const b of document.querySelectorAll("#seg [data-v]")) b.setAttribute("aria-pressed", String(b.dataset.v === S.view));
   const today = startOfDay(new Date());
-  $("#todayBtn").disabled = today >= start && today < end && (S.view !== "month" || today.getMonth() === S.anchor.getMonth());
+  $("#todayBtn").disabled = S.view === "day" && sameDay(S.anchor, today);
   renderAvatars();
 }
 
@@ -186,7 +193,8 @@ function renderAvatars() {
   const accts = S.signedIn ? store.getProfile().accounts : [];
   btn.replaceChildren();
   if (!accts.length) { btn.append(h("span", { class: "av blank" }, icon("people"))); btn.setAttribute("aria-label", "Accounts"); return; }
-  accts.slice(0, 3).forEach((a, i) => btn.append(avatar(a, i)));
+  accts.slice(0, 2).forEach((a, i) => btn.append(avatar(a, i)));
+  if (accts.length > 2) btn.append(h("span", { class: "av more", text: `+${accts.length - 2}` }));
   if (S.reconnect.size) btn.append(h("span", { class: "av-alert", "aria-hidden": "true" }));
   btn.setAttribute("aria-label", `Accounts (${accts.length})`);
 }
@@ -227,7 +235,7 @@ function renderWelcome() {
   } }, icon("close"));
   card.replaceChildren(...[
     h("div", { class: "wc-text" },
-      h("strong", { text: "Your calendar, with a picture for every plan." }),
+      h("strong", {}, h("span", { class: "wc-long", text: "Your calendar, with a picture for every plan." }), h("span", { class: "wc-short", text: "A picture for every plan." })),
       h("span", { text: store.configured ? "These are sample events. Sign in to see yours, from as many Google accounts as you like." : "These are sample events. Add your Firebase settings to js/config.js to connect your calendars (see README)." })),
     store.configured ? h("button", { class: "btn primary", type: "button", onclick: signIn }, googleMark(), "Sign in with Google") : null,
     close,
@@ -241,6 +249,12 @@ function googleMark() {
 }
 
 // ---------------- accounts ----------------
+async function signOut() {
+  closePop();
+  if (MOCK) { S.signedIn = false; S.reconnect.clear(); store.useMock(null); resetMemo(); go({ kind: "fade" }); renderAvatars(); return; }
+  await store.signOut();
+}
+
 async function signIn() {
   try {
     await store.signIn();
@@ -254,6 +268,7 @@ async function signIn() {
 
 async function reconnect(email, btn) {
   if (btn) btn.disabled = true;
+  if (MOCK) { S.reconnect.delete(email); renderBanner(); renderAvatars(); if (!pop.hidden) openPop(); return; }
   try {
     const owner = store.getUser()?.email?.toLowerCase() === email.toLowerCase();
     if (S.gis) await google.reconnect(email);
@@ -268,6 +283,12 @@ async function reconnect(email, btn) {
 }
 
 async function addAccount() {
+  if (MOCK) {
+    const n = store.getProfile().accounts.length + 1;
+    const acct = { email: `extra${n}@example.com`, name: `Extra account ${n}`, picture: "" };
+    await store.update((p) => { p.accounts.push(acct); });
+    closePop(); toast(`Added ${acct.email}`); return;
+  }
   if (!S.gis) { toast("Add googleClientId to js/config.js to link more Google accounts."); return; }
   try {
     const acct = await google.linkAccount();
@@ -303,7 +324,7 @@ async function toggleCalendar(key, on) {
     p.hidden = p.hidden.filter((k) => k !== key);
     if (!on) p.hidden.push(key);
   }).catch((err) => toast(err.message));
-  render(false);
+  render(true);
 }
 
 // ---------------- accounts popover ----------------
@@ -331,14 +352,27 @@ function openPop() {
     if (store.configured) kids.push(h("button", { class: "btn primary wide", type: "button", onclick: signIn }, googleMark(), "Sign in with Google"));
   }
 
+  const autoToggle = h("input", { type: "checkbox", id: "autoPhotos", role: "switch", checked: prof.autoPhotos !== false });
+  autoToggle.addEventListener("change", async () => {
+    await store.update((p) => { p.autoPhotos = autoToggle.checked; }).catch((e) => toast(e.message));
+    resetMemo();
+    render(true);
+  });
+  kids.push(h("section", { class: "pa" },
+    h("label", { class: "sw-row", for: "autoPhotos" },
+      h("span", { class: "sw-txt" },
+        h("strong", { text: "Automatic photos" }),
+        h("span", { class: "sub", text: "For events whose title clearly says what they are, like gym, flight, dinner or birthday. Other events stay plain until you pick a photo." })),
+      autoToggle, h("span", { class: "sw", "aria-hidden": "true" }))));
+
   if (prof.rules.keywords.length) {
     kids.push(h("section", { class: "pa kw" },
       h("p", { class: "pa-note", text: "Keyword photos" }),
       ...prof.rules.keywords.map((k) => h("div", { class: "kw-row" },
         h("span", { class: "kw-word", text: `“${k.word}”` }),
-        h("button", { class: "link-btn", type: "button", text: "Remove", onclick: async () => { await removeKeyword(k.word).catch((e) => toast(e.message)); render(false); openPop(); } })))));
+        h("button", { class: "link-btn", type: "button", text: "Remove", onclick: async () => { await removeKeyword(k.word).catch((e) => toast(e.message)); render(true); openPop(); } })))));
   }
-  if (S.signedIn) kids.push(h("button", { class: "link-btn muted pa-out", type: "button", text: "Sign out", onclick: async () => { closePop(); await store.signOut(); } }));
+  if (S.signedIn) kids.push(h("button", { class: "link-btn muted pa-out", type: "button", text: "Sign out", onclick: signOut }));
 
   pop.replaceChildren(...kids);
   pop.hidden = false;
@@ -379,13 +413,20 @@ function wire() {
   $("#todayBtn").addEventListener("click", goToday);
   for (const b of document.querySelectorAll("#seg [data-v]")) b.addEventListener("click", () => setView(b.dataset.v));
   $("#acctBtn").addEventListener("click", (e) => { e.stopPropagation(); pop.hidden ? openPop() : closePop(); });
-  document.addEventListener("click", (e) => { if (!pop.hidden && !pop.contains(e.target)) closePop(); });
+  document.addEventListener("click", (e) => {
+    if (pop.hidden) return;
+    const path = e.composedPath();
+    if (path.includes(pop) || path.includes($("#acctBtn"))) return;
+    closePop();
+    e.stopPropagation();
+    e.preventDefault();
+  }, true);
 
   document.addEventListener("keydown", (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape" && !pop.hidden) { closePop(); $("#acctBtn").focus(); e.stopImmediatePropagation(); return; }
     if (e.target.closest("input, textarea, [contenteditable]")) return;
     const k = e.key.toLowerCase();
-    if (k === "escape" && !pop.hidden) { closePop(); return; }
     if (panelEvent()) return;
     if (k === "arrowleft" || k === "j") nav(-1);
     else if (k === "arrowright" || k === "k") nav(1);
@@ -408,14 +449,14 @@ function wire() {
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) nav(dx < 0 ? 1 : -1);
   }, { passive: true });
 
-  mobile.addEventListener("change", () => go({ quiet: true }));
-  setInterval(() => { updateNow(stage); renderHeader(); }, 30000);
+  // Keep "now" markers and past events current.
+  setInterval(() => { if (!document.hidden) render(true); }, 60000);
   setInterval(() => { if (!document.hidden && S.signedIn) { dropCache(); go({ quiet: true }); } }, 10 * 60 * 1000);
-  document.addEventListener("visibilitychange", () => { if (!document.hidden) updateNow(stage); });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) render(true); });
 
   setupPanel({
     signedIn: () => S.signedIn,
-    changed: () => { resetMemo(); render(false); },
+    changed: () => { resetMemo(); render(true); },
   });
 
   store.onProfile(() => {
@@ -430,10 +471,21 @@ const hashView = () => ["day", "week", "month"].find((v) => location.hash === `#
 
 async function boot() {
   if (hashView()) S.view = hashView();
+  S.target = { view: S.view, anchor: S.anchor };
   addEventListener("hashchange", () => hashView() && setView(hashView()));
   wire();
   renderWelcome();
   go({ quiet: true });
+  if (MOCK) {
+    store.useMock({ accounts: [
+      { email: "you@example.com", name: "Sample You", picture: "", owner: true },
+      { email: "work@example.com", name: "Work Account", picture: "" },
+    ] });
+    S.signedIn = true;
+    S.reconnect.add("work@example.com");
+    go({ quiet: true });
+    return;
+  }
   google.initGis(googleClientId).then((ok) => (S.gis = ok));
   let firstUser = true;
   await store.init((user, err) => {

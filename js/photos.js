@@ -1,37 +1,54 @@
 // Picks a photo for each event.
 // Order: your choice for the event > for the repeating series > keyword match >
-// image link in the description > automatic Openverse photo from title/location.
+// image link in the description > a hand-checked photo when the title clearly
+// names a kind of event (gym, flight, dinner...). Anything else gets no photo.
 
 import { getProfile, getPhoto, putPhoto, deletePhoto, update } from "./store.js";
 import { hash, loadJSON, saveJSON } from "./util.js";
+import { CURATED } from "./curated.js";
 
 const STOP = new Set(("a an the and or with w for of to at in on by my our your from re fw fwd call meet meeting sync weekly daily monthly " +
   "quick catch up catchup chat session review discussion am pm tbd invite invitation updated event hold busy block ooo").split(" "));
 
+// Specific kinds first: "Yoga class" is yoga, not study.
 const THEMES = [
-  [/stand ?up|scrum|sprint|retro|1:1|1-1|one on one|all[- ]hands|planning|interview|office|design review|workshop/i, "minimal office desk"],
-  [/gym|workout|lift|crossfit|fitness|training/i, "gym workout"],
-  [/\brun\b|running|jog|marathon|\b5k\b|\b10k\b/i, "running trail morning"],
-  [/yoga|pilates|meditat|stretch/i, "yoga calm"],
-  [/swim/i, "swimming pool water"],
-  [/flight|fly|airport|plane/i, "airplane window clouds"],
-  [/train\b|rail/i, "train journey landscape"],
-  [/hike|hiking|trail|mt\.|mount/i, "mountain trail"],
-  [/beach|surf/i, "beach ocean"],
-  [/coffee|cafe|café|latte/i, "coffee cup cafe"],
-  [/lunch|brunch/i, "lunch table food"],
-  [/dinner|pizza|bbq|restaurant|supper/i, "dinner table food"],
-  [/birthday|party|celebrat|anniversary/i, "celebration lights"],
-  [/dentist|doctor|clinic|checkup|appointment|therapy/i, "calm clinic interior"],
-  [/concert|gig|music|band|festival/i, "concert lights"],
-  [/movie|cinema|film/i, "cinema seats"],
-  [/study|class|lecture|exam|school|course/i, "library books"],
-  [/market|grocer|shopping/i, "farmers market"],
-  [/game|gaming/i, "board games"],
-  [/football|soccer|basketball|tennis|badminton|golf/i, "sports field"],
-  [/trip|vacation|holiday|travel/i, "travel landscape"],
-  [/family|kids|mom|dad|parents/i, "family home warm"],
+  { key: "dentist", label: "dentist", q: "dentist", re: /\b(dentist|dental|orthodontist|teeth cleaning)\b/i },
+  { key: "doctor", label: "doctor", q: "doctor stethoscope", re: /\b(doctor|clinic|check-?up|physio|physiotherapy|hospital|medical appointment)\b/i },
+  { key: "birthday", label: "birthday", q: "birthday cake", re: /\b(birthday|bday|b-day)\b/i },
+  { key: "wedding", label: "wedding", q: "wedding", re: /\b(wedding)\b/i },
+  { key: "flight", label: "flight", q: "airplane wing", re: /\b(flight|flying|fly to|airport|boarding)\b/i },
+  { key: "train", label: "train", q: "train station", re: /\b(train (to|from|ride))\b/i },
+  { key: "yoga", label: "yoga", q: "yoga", re: /\b(yoga|pilates|meditation|meditate)\b/i },
+  { key: "swim", label: "swimming", q: "swimming pool", re: /\b(swim|swimming)\b/i },
+  { key: "run", label: "running", q: "running", re: /\b(running|jog|jogging|marathon|parkrun|5k|10k|(morning|evening|long|easy|trail|go for a) run)\b/i },
+  { key: "gym", label: "gym", q: "gym", re: /\b(gym|workout|weights|lifting|crossfit|fitness)\b/i },
+  { key: "cycling", label: "cycling", q: "cycling", re: /\b(cycling|bike ride|biking|spin class)\b/i },
+  { key: "hike", label: "hiking", q: "mountain hike", re: /\b(hike|hiking|trek|trekking)\b/i },
+  { key: "beach", label: "beach", q: "beach", re: /\b(beach|surf|surfing|snorkel\w*)\b/i },
+  { key: "tennis", label: "tennis", q: "tennis court", re: /\b(tennis|pickleball|padel)\b/i },
+  { key: "basketball", label: "basketball", q: "basketball", re: /\b(basketball)\b/i },
+  { key: "soccer", label: "football", q: "soccer ball", re: /\b(soccer|football|futsal)\b/i },
+  { key: "concert", label: "concert", q: "concert", re: /\b(concert|gig|live music|festival)\b/i },
+  { key: "movie", label: "movie", q: "cinema", re: /\b(movie|movies|cinema)\b/i },
+  { key: "games", label: "games", q: "board game", re: /\b(board games?|game night|d&d|dnd)\b/i },
+  { key: "cooking", label: "cooking", q: "cooking", re: /\b(cooking|baking|meal prep)\b/i },
+  { key: "coffee", label: "coffee", q: "coffee", re: /\b(coffee|cafe|café|latte|espresso)\b/i },
+  { key: "lunch", label: "lunch", q: "lunch", re: /\b(lunch|brunch)\b/i },
+  { key: "dinner", label: "dinner", q: "dinner", re: /\b(dinner|supper|date night|bbq|barbecue|restaurant)\b/i },
+  { key: "market", label: "market", q: "farmers market", re: /\b(farmers market|grocery|groceries)\b/i },
+  { key: "haircut", label: "haircut", q: "barber", re: /\b(haircut|hair cut|barber|hair salon)\b/i },
+  { key: "dog", label: "dog", q: "dog", re: /\b(dog walk|walk the dog|vet appointment|veterinar\w*|puppy)\b/i },
+  { key: "travel", label: "trip", q: "travel", re: /\b(trip|vacation|travel|getaway)\b/i },
+  { key: "study", label: "study", q: "library books", re: /\b(study session|study group|lecture|exam|homework|library|tutoring)\b/i },
+  { key: "meeting", label: "meeting", q: "meeting room", re: /\b(stand-?up|scrum|sprint planning|retro|retrospective|all[- ]hands|workshop|interview|offsite|meeting|1:1|one[- ]on[- ]one)\b/i },
 ];
+
+// The kind of event a title clearly names, or null.
+export function themeFor(ev) {
+  const title = String(ev.title || "");
+  const lower = title.toLowerCase();
+  return THEMES.find((t) => t.re.test(title)) || null;
+}
 
 export function wordsOf(text) {
   return String(text || "").toLowerCase().replace(/[^\p{L}\p{N}\s'.-]/gu, " ").split(/\s+/)
@@ -45,17 +62,13 @@ function placeName(location) {
   return w.length && w.length <= 3 ? w.join(" ") : "";
 }
 
+// Starting text for the photo search box in the event panel.
 export function autoQuery(ev) {
-  const place = placeName(ev.location);
-  for (const [re, q] of THEMES) {
-    if (!re.test(ev.title)) continue;
-    // A city or landmark makes a more personal scene for trips and meals.
-    if (place && /trip|travel|vacation|holiday|hike|dinner|lunch|flight/i.test(ev.title)) return place;
-    return q;
-  }
+  const theme = themeFor(ev);
+  if (theme) return theme.q;
   const w = wordsOf(ev.title).slice(0, 3);
   if (w.length) return w.join(" ");
-  return place;
+  return placeName(ev.location);
 }
 
 function imageFromDescription(desc) {
@@ -123,6 +136,15 @@ const memo = new Map();
 const memoKey = (ev) => `${ev.id}|${ev.title}`;
 export const resetMemo = () => memo.clear();
 
+// Whether this event will get a photo, known without waiting for any download.
+export function expectsPhoto(ev) {
+  if (ruleFor(ev)) return true;
+  if (imageFromDescription(ev.description)) return true;
+  if (getProfile().autoPhotos === false) return false;
+  const theme = themeFor(ev);
+  return !!(theme && CURATED[theme.key]?.length);
+}
+
 export function cachedPhoto(ev) {
   const v = memo.get(memoKey(ev));
   return v && !(v instanceof Promise) ? v : undefined;
@@ -153,15 +175,11 @@ async function resolve(ev) {
   }
   const fromDesc = imageFromDescription(ev.description);
   if (fromDesc) return { url: fromDesc, thumb: fromDesc, credit: { by: "From the event description", link: fromDesc } };
-  const q = autoQuery(ev);
-  if (!q) return null;
-  let results = await search(q);
-  if (!results.length) {
-    const place = placeName(ev.location);
-    if (place && place !== q) results = await search(place);
-  }
-  if (!results.length) return null;
-  return results[hash(ev.seriesId || ev.title) % results.length];
+  if (getProfile().autoPhotos === false) return null;
+  const theme = themeFor(ev);
+  const set = theme && CURATED[theme.key];
+  if (!set?.length) return null;
+  return set[hash(ev.seriesId || ev.title) % set.length];
 }
 
 // ---- saving a choice ----
