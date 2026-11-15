@@ -23,6 +23,21 @@ async function closeWithEsc() {
   await page.waitFor("!document.body.classList.contains('panel-open')");
 }
 
+test("the card's photo flies into the panel and back, without hiding the card", async () => {
+  const sel = await cardSel("Coffee with Alex");
+  await page.waitFor(`document.querySelector('${sel} > .ph.shown')`);
+  await page.eval("window.__flights = 0; new MutationObserver((m) => m.forEach((r) => r.addedNodes.forEach((n) => { if (n.classList?.contains('fly')) __flights++; }))).observe(document.body, { childList: true }); 1");
+  await page.click(sel);
+  await page.waitFor("window.__flights === 1");
+  await page.waitFor("!document.querySelector('.fly')");
+  // The panel's own photo is showing once the copy has landed.
+  assert.equal(await page.eval("getComputedStyle(document.querySelector('.pv-photo > .ph')).visibility"), "visible");
+  await page.key("Escape");
+  await page.waitFor("window.__flights === 2");
+  assert.equal(await page.eval(`getComputedStyle(document.querySelector('${sel} > .ph')).visibility`), "visible");
+  await page.waitFor("!document.querySelector('.fly') && document.getElementById('panel').hidden");
+});
+
 test("opens from a card with the event details and focus on Close", async () => {
   await page.click(await cardSel("Coffee with Alex"));
   await page.waitFor("document.querySelector('.pv-title')?.textContent === 'Coffee with Alex'");

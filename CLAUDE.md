@@ -97,8 +97,12 @@ runtime dependencies. Firebase is loaded from the gstatic CDN in `js/store.js`
   `element.click()`.
 - `page.settle()` waits for running animations. `center()`, and so `click()`
   and `tap()`, calls it first.
-- Network is stubbed. Openverse returns `tests/e2e/fixtures/openverse.json` and
-  every remote image is a tiny PNG. Firebase and font CDNs still load for real.
+- Network is stubbed. Openverse API calls return `tests/e2e/fixtures/openverse.json`
+  and every remote image is a tiny PNG. Firebase and font CDNs still load for real.
+  Curated thumbnails are *also* on `api.openverse.org` (`/thumb/`), so the stub
+  matches images first. `list.e2e.mjs` checks that photo cards really paint.
+- `REAL_IMAGES=1 npm run screenshots` loads the real photos for a visual check.
+  Picker search results still come from the fixture, so the grid stays blank.
 - Each test file asserts there were **no console errors**.
 - `page.swipe()` holds still before lifting the finger. A fling would make
   Chrome swallow the next tap.

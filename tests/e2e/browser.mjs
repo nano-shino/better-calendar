@@ -6,6 +6,7 @@
 //  - locale en-US (weeks start on Sunday),
 //  - stubbed network for photos: Openverse API calls return tests/e2e/fixtures/openverse.json
 //    and every remote image is a tiny PNG, so tests are fast and never flaky.
+//    Set REAL_IMAGES=1 to load the real photos (for screenshots you want to look at).
 //
 // Input goes through real mouse / keyboard / touch events (Input.dispatch*),
 // which catches overlay and hit-testing bugs that element.click() would hide.
@@ -20,6 +21,8 @@ export const TIMEZONE = "UTC";
 export const ARTIFACTS = new URL("../.artifacts/", import.meta.url);
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// REAL_IMAGES=1 lets photos load from the network (for screenshots you want to look at).
+const REAL_IMAGES = !!process.env.REAL_IMAGES;
 const FIXTURE = readFileSync(new URL("./fixtures/openverse.json", import.meta.url), "utf8");
 // 4x3 grey-blue PNG
 const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAQAAAADCAIAAAA7ljmRAAAAEElEQVR4nGOIyuuBIwacHAA0pg/xmjATKQAAAABJRU5ErkJggg==", "base64");
@@ -86,10 +89,11 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW } = {}) {
     if (d.method === "Fetch.requestPaused") {
       const { requestId, request, resourceType } = d.params;
       try {
-        if (request.url.includes("api.openverse.org")) {
-          await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }, { name: "Access-Control-Allow-Origin", value: "*" }], body: Buffer.from(FIXTURE).toString("base64") });
-        } else if (resourceType === "Image" && !request.url.startsWith("data:") && !request.url.includes("127.0.0.1")) {
+        // Images first: curated thumbnails live on api.openverse.org too (/thumb/).
+        if (resourceType === "Image" && !REAL_IMAGES && !request.url.startsWith("data:") && !request.url.includes("127.0.0.1")) {
           await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "image/png" }, { name: "Access-Control-Allow-Origin", value: "*" }], body: PNG.toString("base64") });
+        } else if (resourceType !== "Image" && request.url.includes("api.openverse.org")) {
+          await send("Fetch.fulfillRequest", { requestId, responseCode: 200, responseHeaders: [{ name: "Content-Type", value: "application/json" }, { name: "Access-Control-Allow-Origin", value: "*" }], body: Buffer.from(FIXTURE).toString("base64") });
         } else {
           await send("Fetch.continueRequest", { requestId });
         }

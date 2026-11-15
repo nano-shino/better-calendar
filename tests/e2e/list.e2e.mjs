@@ -30,6 +30,9 @@ test("events with a clear kind get an automatic photo", async () => {
     const [cls] = await cardsTitled(t);
     assert.match(cls, /photo/, t);
   }
+  // ...and the photo actually loads and shows (not the colour fallback).
+  await page.waitFor("[...document.querySelectorAll('.card.photo')].every((c) => c.querySelector(':scope > .ph.shown'))");
+  assert.equal(await page.eval("document.querySelectorAll('.card.no-photo').length"), 0);
 });
 
 test("today shows a Now line between past and upcoming events", async () => {

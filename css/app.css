@@ -405,8 +405,9 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
 
 /* ---------- shared keyframes ---------- */
 @keyframes fade-up-in { from { opacity: 0; transform: translateY(8px); } }
-@keyframes panel-in { from { opacity: 0; transform: translateX(28px) scale(0.985); } }
-@keyframes panel-out { to { opacity: 0; transform: translateX(32px); } }
+/* The panel slides in and out whole and opaque: a half-faded panel shows the list through its text. */
+@keyframes panel-in { from { transform: translateX(calc(100% + 24px)); } }
+@keyframes panel-out { to { transform: translateX(calc(100% + 24px)); } }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes fade-out { to { opacity: 0; } }
 
@@ -444,7 +445,6 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
   .card.plain .c-cal { display: none; }
   .panel { top: auto; left: 0; right: 0; bottom: 0; width: 100%; height: min(88dvh, 760px); border-radius: 22px 22px 0 0; }
   @keyframes panel-in { from { transform: translateY(100%); } }
-  @keyframes panel-out { to { opacity: 0; transform: translateY(48px); } }
   .pv-details { padding: 18px 20px 6px; }
   .pv-title { font-size: 23px; }
   .picker { margin: 10px 12px 24px; }
@@ -565,8 +565,8 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
 
 /* Panel motion without view transitions: nothing ever blocks the pointer. */
 .fly { position: fixed; z-index: 100; pointer-events: none; background-size: cover; background-position: center; will-change: transform, width, height; }
-.panel.opening { animation: panel-in 0.45s var(--ease) both; }
-.panel.closing { animation: panel-out 0.2s var(--ease-in) both; pointer-events: none; }
+.panel.opening { animation: panel-in 0.42s var(--ease) both; }
+.panel.closing { animation: panel-out 0.24s var(--ease-in) both; pointer-events: none; }
 .scrim:not([hidden]) { animation: fade-in 0.3s ease both; }
 .scrim.closing { animation: fade-out 0.28s ease both; pointer-events: none; }
 
