@@ -52,7 +52,7 @@ test("photo cards show the whole 16:9 photo beside the text, over a blurred copy
 
 test("today shows a Now line between past and upcoming events", async () => {
   const order = await page.eval("[...document.querySelectorAll('.day.today .cards > li')].map((li) => li.classList.contains('now-mark') ? 'NOW' : li.classList.contains('now-gap') ? 'GAP' : li.classList.contains('part-mark') ? li.querySelector('.pm-label').textContent : li.querySelector('.c-title').textContent)");
-  assert.deepEqual(order, ["Team standup", "NOW", "GAP", "Noon", "Coffee with Alex", "Evening", "Gym"]);
+  assert.deepEqual(order, ["Breakfast with Sam", "Team standup", "NOW", "GAP", "Noon", "Coffee with Alex", "Evening", "Gym"]);
   assert.match(await page.eval("document.querySelector('.day.today .card').className"), /past/);
 });
 
@@ -123,6 +123,7 @@ test("the sky strip is grey up to Now and on past days, colored after", async ()
   const strip = await page.eval(`[...document.querySelectorAll('.day.today .cards > li[data-sky]')].map((li) =>
     [li.classList.contains('now-mark') ? 'NOW' : li.querySelector('.c-title, .pm-label').textContent, li.style.getPropertyValue('--st-a'), li.style.getPropertyValue('--st-b')])`);
   assert.deepEqual(strip, [
+    ["Breakfast with Sam", "var(--strip-past)", "var(--strip-past)"],
     ["Team standup", "var(--strip-past)", "var(--strip-past)"],
     ["NOW", "var(--strip-past)", "var(--strip-afternoon)"],
     ["Noon", "var(--strip-afternoon)", "var(--strip-afternoon)"],
@@ -165,6 +166,19 @@ test("past events are grey until hovered", async () => {
   const id = await page.eval(`${slotOf("Team standup")}.querySelector('.card').dataset.id`);
   await page.hover(`.day.today .card[data-id="${id}"]`);
   await page.waitFor(`getComputedStyle(document.querySelector('.day.today .card[data-id="${id}"]')).filter === 'none'`);
+  // The standup lies on breakfast. Spread out, it fades like the card beside it and lights up the same way.
+  const sel = `.day.today .card[data-id="${id}"]`;
+  await page.click(sel);
+  await page.waitFor(`document.querySelector('${sel}').closest('li').classList.contains('dk-open')`);
+  await page.hover('#title');
+  await page.settle();
+  const look = (t) => page.eval(`(() => { const s = getComputedStyle(${slotOf(t)}.querySelector('.card')); return s.filter + ' / ' + s.opacity; })()`);
+  assert.equal(await look('Team standup'), await look('Breakfast with Sam'));
+  await page.hover(sel);
+  await page.waitFor(`getComputedStyle(document.querySelector('${sel}')).filter === 'none' && getComputedStyle(document.querySelector('${sel}')).opacity === '1'`);
+  const clock = await page.eval(`(() => { const b = ${slotOf('Team standup')}.querySelector('.c-clock').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + 12 }; })()`);
+  await page.clickAt(clock.x, clock.y);
+  await page.waitFor(`!${slotOf('Team standup')}.classList.contains('dk-open')`);
 });
 
 const rectOf = (expr) => page.eval(`(() => { const b = (${expr}).getBoundingClientRect(); return { top: b.top, bottom: b.bottom, left: b.left, right: b.right, x: b.x + b.width / 2 }; })()`);

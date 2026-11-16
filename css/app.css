@@ -794,10 +794,14 @@ a.link-btn { text-decoration: none; }
 .card.dk-top.plain,
 .card.dk-top.plain:hover { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c) 18%, var(--hair)), -8px 0 18px -10px rgb(20 24 33 / 0.3), 0 14px 26px -14px rgb(20 24 33 / 0.38); }
 .card.dk-top.photo { box-shadow: -8px 0 18px -10px rgb(12 14 20 / 0.4), 0 16px 30px -14px rgb(12 14 20 / 0.5); }
-/* A card lying on another must be opaque, or the one below shows through when it fades. */
-.cards > .slot.past > .card.plain.dk-top, .cards .card.plain.past.dk-top { opacity: 1; filter: grayscale(1) contrast(0.55) brightness(1.17); }
-.cards > .slot.past > .card.photo.dk-top { opacity: 1; filter: grayscale(1) brightness(0.8); }
-.cards > .slot > .card.dk-top:hover, .cards .card.dk-top:focus-visible { filter: none; }
+/* A card lying on another must be opaque, or the one below shows through when it fades.
+   Only while stacked: spread out, it fades like any past card. Hover and focus bring
+   its colour back either way (these selectors must outrank the ones above). */
+.cards > .slot.past:not(.dk-open) > .card.plain.dk-top,
+.cards > .slot:not(.dk-open) > .card.plain.past.dk-top { opacity: 1; filter: grayscale(1) contrast(0.55) brightness(1.17); }
+.cards > .slot.past:not(.dk-open) > .card.photo.dk-top { opacity: 1; filter: grayscale(1) brightness(0.8); }
+.cards > .slot:not(.dk-open) > .card.dk-top.dk-top:hover,
+.cards > .slot:not(.dk-open) > .card.dk-top.dk-top:focus-visible { opacity: 1; filter: none; }
 
 /* spread apart: ordinary cards in a row; the time column stacks them again */
 .cards > li.dk-tuck.dk-open { margin-top: 0; }
