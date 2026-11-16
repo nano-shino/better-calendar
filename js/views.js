@@ -10,11 +10,16 @@ const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComp
 const painted = new Set();
 
 // Fades a photo into el's .ph child once it has loaded. Instant if already known.
+// A photo card's artwork (.c-art) also paints the blurred backdrop behind the card.
 export function paintPhoto(el, ev, size = "thumb") {
   const ph = el.querySelector(":scope > .ph");
   if (!ph) return;
+  const glow = el.classList.contains("c-art") ? el.parentElement?.querySelector(":scope > .c-glow") : null;
   const src = (p) => (size === "full" ? p.url : p.thumb);
-  const apply = (p) => { ph.style.backgroundImage = size === "full" && p.url !== p.thumb ? `${cssUrl(p.url)}, ${cssUrl(p.thumb)}` : cssUrl(src(p)); };
+  const apply = (p) => {
+    ph.style.backgroundImage = size === "full" && p.url !== p.thumb ? `${cssUrl(p.url)}, ${cssUrl(p.thumb)}` : cssUrl(src(p));
+    if (glow) glow.style.backgroundImage = cssUrl(src(p));
+  };
   const instant = (p) => { apply(p); ph.classList.add("shown", "instant"); el.classList.remove("no-photo"); };
   const known = cachedPhoto(ev);
   if (known !== undefined) {
@@ -109,11 +114,21 @@ export function renderList(days, events, ctx, mode) {
     // The "Now" line separates past from upcoming; a live event shows "Now" itself.
     const hasLive = list.some((e) => !e.allDay && e.start <= now && e.end > now);
     let nowPlaced = !isToday || hasLive;
+    let part = 0;
     for (const ev of list) {
+      // Noon and Evening markers go before the first event that starts in each,
+      // and on the right side of the Now line: before it once the hour has passed.
+      let mark = null;
+      if (!ev.allDay) {
+        const p = partOf(ev.start < day ? day : ev.start);
+        if (p > part) { part = p; mark = partMark(day, PARTS[p - 1], now); }
+      }
       if (!nowPlaced && !ev.allDay && ev.start > now) {
-        ol.append(nowMark(now));
+        if (mark?.classList.contains("past")) { ol.append(mark); mark = null; }
+        ol.append(nowMark(now), nowGap(now, ev));
         nowPlaced = true;
       }
+      if (mark) ol.append(mark);
       ol.append(h("li", {}, card(ev, now, ctx, isLead(ev))));
     }
     if (!nowPlaced && list.some((e) => !e.allDay)) ol.append(nowMark(now));
@@ -131,9 +146,54 @@ export function renderList(days, events, ctx, mode) {
   return root;
 }
 
+// Landmarks in the day, so the eye finds afternoon and evening plans without
+// reading times. Morning needs none: it is the top of every day.
+const svg = (d) => {
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  el.setAttribute("viewBox", "0 0 24 24");
+  el.setAttribute("aria-hidden", "true");
+  el.setAttribute("class", "pm-ic");
+  el.innerHTML = d;
+  return el;
+};
+const PARTS = [
+  { key: "noon", label: "Noon", hour: 12,
+    icon: '<circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/>' },
+  { key: "evening", label: "Evening", hour: 17,
+    icon: '<path d="M7.5 16a4.5 4.5 0 0 1 9 0"/><path d="M3 16h18M6 20h12M12 5.5v3M5.3 9.3l1.8 1.8M18.7 9.3l-1.8 1.8M2.5 13h2M19.5 13h2"/>' },
+];
+const partOf = (d) => { const hr = d.getHours(); return hr >= 17 ? 2 : hr >= 12 ? 1 : 0; };
+
+function partMark(day, p, now) {
+  const at = new Date(day); at.setHours(p.hour, 0, 0, 0);
+  return h("li", { class: `part-mark pm-${p.key}${at <= now ? " past" : ""}`, "aria-label": `${p.label}, from ${fmt.time.format(at)}` },
+    h("span", { class: "pm-badge", "aria-hidden": "true" }, svg(p.icon)),
+    h("span", { class: "pm-label", "aria-hidden": "true", text: p.label }),
+    h("span", { class: "pm-time", "aria-hidden": "true", text: fmt.hour.format(at) }));
+}
+
 function nowMark(now) {
   return h("li", { class: "now-mark", "aria-label": `Now, ${fmt.time.format(now)}` },
     h("span", { class: "nm-pill", text: "Now" }), h("span", { class: "nm-time", text: fmt.time.format(now) }));
+}
+
+// The free time between now and today's next event: a dotted thread from the Now
+// pill to that card, taller the longer the wait (log
+// scale, so a free afternoon doesn't push the card off screen), with a countdown.
+function nowGap(now, next) {
+  const mins = Math.max(1, Math.ceil((next.start - now) / 60000));
+  const k = Math.min(1, Math.max(0, Math.log(mins / 10) / Math.log(48)));
+  const hrs = Math.floor(mins / 60), rest = mins % 60;
+  const left = hrs ? `${hrs}h${rest ? ` ${rest}m` : ""}` : `${mins}m`;
+  return h("li", {
+    class: `now-gap${mins <= 15 ? " soon" : ""}`,
+    vars: { "--gap-h": `${Math.round(40 + 48 * k)}px` },
+    "aria-label": `${duration(mins * 60000)} until ${next.title}`,
+  },
+  h("span", { class: "ng-thread", "aria-hidden": "true" }),
+  h("span", { class: "ng-text", "aria-hidden": "true" },
+    h("span", { class: "ng-left", text: left }),
+    h("span", { class: "ng-until", text: `until ${next.title}` })));
 }
 
 function whenLabel(ev) {
@@ -145,12 +205,13 @@ function whenLabel(ev) {
   return timeRange(ev.start, ev.end);
 }
 
-// big: photo card. Otherwise a compact row, with a small thumbnail when the event has a photo.
+// big: photo card, the whole photo beside the text over a blurred copy of it. Otherwise a compact row, with a small thumbnail when the event has a photo.
 function card(ev, now, ctx, lead) {
   const hasPhoto = expectsPhoto(ev);
   const big = hasPhoto && lead;
   const live = !ev.allDay && ev.start <= now && ev.end > now;
   const past = ev.end <= now;
+  const art = big ? h("span", { class: "c-art" }, h("span", { class: "ph" })) : null;
   const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
   const tile = !big && !thumb ? (ev.untitled
     ? h("span", { class: "c-tile c-tile-blank", "aria-hidden": "true" })
@@ -163,7 +224,8 @@ function card(ev, now, ctx, lead) {
     "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}`,
     onclick: (e) => ctx.openEvent(ev, e.currentTarget),
   },
-  big ? h("span", { class: "ph" }) : null,
+  big ? h("span", { class: "c-glow", "aria-hidden": "true" }) : null,
+  art,
   thumb,
   tile,
   h("span", { class: "c-body" },
@@ -174,7 +236,7 @@ function card(ev, now, ctx, lead) {
     h("span", { class: `c-title${ev.untitled ? " c-title-untitled" : ""}`, text: ev.title }),
     ev.location ? h("span", { class: "c-loc", text: ev.location.split("\n")[0] }) : null),
   h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
-  if (big) paintPhoto(el, ev);
+  if (big) paintPhoto(art, ev);
   else if (thumb) paintPhoto(thumb, ev);
   return el;
 }

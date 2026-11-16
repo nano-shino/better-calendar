@@ -87,6 +87,5 @@ Openverse search is used only in the picker.
 
 ## Panel
 
-On open, a `.fly` clone of the card's photo animates (WAAPI) into the panel's
-hero; on close it flies back and fades out over the card. The clone has
-`pointer-events: none`, so it never blocks input.
+The panel slides in with its photo already in place; the card's photo doesn't
+animate into it (a flying copy looked worse than a plain slide).

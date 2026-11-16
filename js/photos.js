@@ -48,7 +48,6 @@ const THEMES = [
 export function themeFor(ev) {
   if (ev.untitled) return null;
   const title = String(ev.title || "");
-  const lower = title.toLowerCase();
   return THEMES.find((t) => t.re.test(title)) || null;
 }
 

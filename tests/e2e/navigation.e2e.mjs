@@ -29,7 +29,7 @@ test("switches views with the segmented control, keys and the address hash", asy
   assert.equal(await page.eval("document.querySelector('#seg [aria-pressed=true]').dataset.v"), "week");
 });
 
-test("switching between Week and Month only fades: today's cards don't move", async () => {
+test("switching between Week and Month swaps in place: today's cards don't move", async () => {
   const card = () => page.eval("Math.round(document.querySelector('.day.today .card').getBoundingClientRect().top)");
   const before = await card();
   await page.click('#seg [data-v="month"]');
@@ -39,8 +39,16 @@ test("switching between Week and Month only fades: today's cards don't move", as
   for (let i = 0; i < 8; i++) { tops.push(await card()); await sleep(30); }
   assert.deepEqual([...new Set(tops)], [before]);
   assert.equal(await page.eval("getComputedStyle(document.querySelector('#stage > .agenda')).transform"), "none");
+  // No white flash: from the first frame of the switch, the new list and the
+  // photo glows that were already showing stay fully opaque.
+  await page.eval(`window.__minOpacity = 1; window.__sampling = true; (function tick() {
+    for (const el of document.querySelectorAll("#stage > .agenda, .card.photo:has(.ph.instant) .c-glow")) __minOpacity = Math.min(__minOpacity, +getComputedStyle(el).opacity);
+    if (__sampling) requestAnimationFrame(tick);
+  })()`);
   await page.click('#seg [data-v="week"]');
   await page.waitFor("document.querySelector('#stage').dataset.view === 'week'");
+  await sleep(250);
+  assert.equal(await page.eval("(__sampling = false, __minOpacity)"), 1);
   assert.equal(await card(), before);
 });
 
@@ -94,4 +102,24 @@ test("the title animates only when its words change", async () => {
   await page.key("ArrowRight"); // Nov 29 – Dec 5
   await page.waitFor("document.getElementById('title').textContent === 'Nov – Dec 2026'");
   assert.equal(await titleAnimating(), true);
+});
+
+test("the now line is equally thick in Day, Week and Month", async () => {
+  // It sits at a different fractional y in each view. A background line blurs
+  // differently at each; a border is snapped to whole device pixels.
+  await page.eval("location.hash = '#week'; location.reload()");
+  await sleep(300);
+  await page.waitFor("document.querySelector('.now-mark')");
+  const lines = [];
+  for (const v of ["day", "week", "month"]) {
+    await page.eval(`location.hash = '#${v}'`);
+    await page.waitFor(`document.querySelector('#stage').dataset.view === '${v}' && document.querySelector('.now-mark')`);
+    lines.push(await page.eval("(() => { const s = getComputedStyle(document.querySelector('.now-mark'), '::after'); return { bg: s.backgroundColor, border: s.borderTopWidth }; })()"));
+  }
+  for (const l of lines) {
+    assert.equal(l.bg, "rgba(0, 0, 0, 0)", "drawn as a border, not a background");
+    assert.notEqual(l.border, "0px");
+  }
+  assert.equal(new Set(lines.map((l) => l.border)).size, 1);
+  await page.eval("location.hash = '#week'");
 });

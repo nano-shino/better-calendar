@@ -160,7 +160,7 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW, routes = n
       await sleep(150);
       await page.waitFor(ready, { timeout: 10000 });
     },
-    /** Wait until no CSS/Web animations are running (list slide-ins, panel, flying photo). */
+    /** Wait until no CSS/Web animations are running (list slide-ins, panel). */
     async settle(timeout = 2000) {
       await page.waitFor("document.getAnimations().filter((a) => a.playState === 'running' && !String(a.animationName || '').match(/sweep|pulse/)).length === 0", { timeout }).catch(() => {});
     },

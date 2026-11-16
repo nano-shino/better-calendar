@@ -1,4 +1,4 @@
-// Event detail sheet with the photo picker. The event's photo flies into it.
+// Event detail sheet with the photo picker.
 import { h, $, fmt, timeRange, duration, descriptionText, linkify, addDays, sameDay } from "./util.js";
 import { paintPhoto } from "./views.js";
 import { photoFor, ruleFor, autoQuery, search, choose, clearChoice, upload, wordsOf, themeFor, expectsPhoto } from "./photos.js";
@@ -23,39 +23,10 @@ export function setupPanel(context) {
 export const panelEvent = () => current;
 
 const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
-let flight = null;
 let closeTimer = 0;
 
-// Flies a copy of a photo from one box to another. It ignores the pointer, so
-// nothing on the page is blocked while it moves.
-// fadeOut: dissolve into the destination at the end (used when the card underneath
-// already shows the same photo and its text).
-function fly(fromEl, toBox, image, radiusFrom, radiusTo, done, fadeOut = false) {
-  flight?.cancel();
-  const a = fromEl.getBoundingClientRect();
-  const clone = h("div", { class: "fly", style: {
-    left: "0px", top: "0px", width: `${a.width}px`, height: `${a.height}px`, backgroundImage: image,
-  } });
-  document.body.append(clone);
-  const from = { transform: `translate(${a.left}px, ${a.top}px)`, width: `${a.width}px`, height: `${a.height}px`, borderRadius: radiusFrom, opacity: 1 };
-  const to = { transform: `translate(${toBox.left}px, ${toBox.top}px)`, width: `${toBox.width}px`, height: `${toBox.height}px`, borderRadius: radiusTo, opacity: 1 };
-  const frames = fadeOut ? [from, { ...to, offset: 0.7 }, { ...to, opacity: 0 }] : [from, to];
-  const anim = clone.animate(frames, { duration: fadeOut ? 520 : 460, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" });
-  flight = { cancel: () => { anim.cancel(); clone.remove(); done?.(); } };
-  anim.finished.then(() => { clone.remove(); flight = null; done?.(); }, () => {});
-}
-
-// Where the panel's photo will sit once the panel has finished sliding in.
-function heroBox() {
-  const photo = $(".pv-photo", panel);
-  const left = panel.offsetLeft + photo.offsetLeft;
-  const top = panel.offsetTop + photo.offsetTop;
-  return { left, top, width: photo.offsetWidth, height: photo.offsetHeight };
-}
-
-export function openPanel(ev, sourceEl) {
+export function openPanel(ev) {
   clearTimeout(closeTimer);
-  const srcPh = sourceEl?.querySelector(":scope > .ph.shown");
   const wasOpen = !!current;
   if (current?.id !== ev.id) expandedFor = null;
   current = ev;
@@ -71,12 +42,6 @@ export function openPanel(ev, sourceEl) {
     panel.classList.remove("opening"); void panel.offsetWidth; panel.classList.add("opening");
   }
   $(".pv-close", panel)?.focus({ preventScroll: true });
-  if (srcPh && !wasOpen && !reduceMotion()) {
-    const hero = $(".pv-photo > .ph", panel);
-    hero.style.visibility = "hidden";
-    const r = getComputedStyle(panel).borderTopLeftRadius;
-    fly(srcPh, heroBox(), getComputedStyle(srcPh).backgroundImage, "18px", `${r} ${r} 0 0`, () => { hero.style.visibility = ""; });
-  }
 }
 
 export function closePanel() {
@@ -88,17 +53,6 @@ export function closePanel() {
   const card = document.querySelector(`#stage [data-id="${CSS.escape(id)}"]`);
   card?.focus({ preventScroll: true });
 
-  // The photo flies back to its card when that card is on screen.
-  const hero = $(".pv-photo > .ph.shown", panel);
-  const target = card?.querySelector(":scope > .ph.shown");
-  if (hero && target && !reduceMotion()) {
-    const r = target.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < innerHeight) {
-      const pr = getComputedStyle(panel).borderTopLeftRadius;
-      fly(hero, { left: r.left, top: r.top, width: r.width, height: r.height }, getComputedStyle(hero).backgroundImage, `${pr} ${pr} 0 0`, "18px", null, true);
-      hero.style.visibility = "hidden";
-    }
-  }
   // Fade out without blocking the page: the panel and scrim ignore the pointer while they go.
   panel.classList.remove("opening");
   panel.classList.add("closing");

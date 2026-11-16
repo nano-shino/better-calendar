@@ -137,8 +137,9 @@ const goToday = () => {
 const setView = (view, anchor = S.target.anchor) => {
   const from = S.target.view;
   if (view === from && sameDay(anchor, S.target.anchor)) return;
-  // Only a fade: the same cards stay put across views, so moving them looks like a jump.
-  go({ view, anchor, kind: "fade" });
+  // Swapped in place, no fade: the same cards stay put across views, and fading
+  // the new list in from transparent shows the bare page behind it as a flash.
+  go({ view, anchor, kind: "swap" });
 };
 
 // ---------------- rendering ----------------
@@ -147,7 +148,7 @@ const setView = (view, anchor = S.target.anchor) => {
 function render(keepScroll) {
   const prevScroll = stage.scrollTop;
   const events = S.events.filter(visible);
-  const ctx = { openEvent: (e, el) => openPanel(e, el), openDay: (d) => setView("day", startOfDay(d)) };
+  const ctx = { openEvent: (e) => openPanel(e), openDay: (d) => setView("day", startOfDay(d)) };
   const { start, end } = rangeOf(S.view, S.anchor);
   const days = [];
   for (let d = start; d < end; d = addDays(d, 1)) days.push(d);
@@ -161,7 +162,7 @@ function render(keepScroll) {
 // Slide/fade the new list and title in. No overlay, so clicks keep working mid-animation.
 function animateIn(kind) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
-  stage.firstElementChild?.classList.add(`enter-${kind}`);
+  if (kind !== "swap") stage.firstElementChild?.classList.add(`enter-${kind}`);
   const title = $("#title");
   if (!S.titleChanged) return; // the same words again: animating them only looks like a flicker
   title.classList.remove("enter");

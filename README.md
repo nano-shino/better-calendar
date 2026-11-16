@@ -19,8 +19,7 @@ token, encrypted. It never sees your events.
   title containing a word. An image link in the description works too.
 - **Automatic photos** come from a hand-checked set. They appear only when
   the title clearly names a kind of event, such as gym, flight, dinner or
-  birthday. Nothing is guessed, and you can turn them
-  off in the avatar menu.
+  birthday. Nothing is guessed, and you can turn them off in the avatar menu.
 - **Keys:** `D` `W` `M` views, `←` `→` move, `T` today, `Esc` close. On phones, swipe.
 
 ## Development
