@@ -45,9 +45,11 @@ test("hiding a calendar removes its events", async () => {
   assert.equal(await popOpen(), true);
 });
 
-test("turning off automatic photos leaves only plain cards", async () => {
+test("turning off automatic photos (under Advanced) leaves only plain cards", async () => {
   const before = (await page.state()).photoCards;
   assert.ok(before > 3);
+  await page.click(".pop .adv-sum");
+  await page.waitFor("document.querySelector('.pop .adv')?.open");
   await page.click('label[for="autoPhotos"]');
   assert.equal((await page.state()).photoCards, 0);
   await page.click('label[for="autoPhotos"]');
@@ -128,7 +130,7 @@ test("picking a theme recolors the page, and it is still picked after a reload",
   assert.equal(await page.eval("document.querySelector('meta[name=theme-color]').content"), "#282a36");
   assert.equal(await popOpen(), true, "the menu stays open while picking");
 
-  await page.goto("?mock#week");
+  await page.reload();
   assert.equal(await bg(), "rgb(40, 42, 54)");
   await page.click("#acctBtn");
   assert.equal(await page.eval("document.getElementById('th-dracula').checked"), true);
@@ -139,4 +141,39 @@ test("picking a theme recolors the page, and it is still picked after a reload",
   assert.equal(await page.eval("document.documentElement.dataset.theme"), system);
   await page.click('label[for="th-light"]');
   await page.key("Escape");
+});
+
+test("Advanced holds the immersive cards switch: dark photo cards, kept after a reload", async () => {
+  // Its own browser: earlier tests here change settings that a real reload keeps.
+  const page = await launch();
+  try {
+    await page.goto("?mock#week");
+    const cardBg = () => page.eval("getComputedStyle(document.querySelector('.card.photo')).backgroundImage");
+    const glowShown = () => page.eval("getComputedStyle(document.querySelector('.card.photo .c-glow')).display !== 'none'");
+    await page.waitFor("document.querySelector('.card.photo')");
+    assert.equal(await cardBg(), "none", "photo cards are paper by default");
+    assert.equal(await glowShown(), false);
+
+    await page.click("#acctBtn");
+    assert.equal(await page.eval("document.querySelector('.pop .adv').open"), false, "Advanced starts folded");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    await page.click('label[for="immersiveCards"]');
+    assert.equal(await page.eval("document.documentElement.dataset.cards"), "immersive");
+    assert.match(await cardBg(), /gradient/);
+    assert.equal(await glowShown(), true);
+    assert.equal(await page.eval("!document.getElementById('acctPop').hidden"), true, "the menu stays open while switching");
+
+    await page.reload();
+    assert.equal(await page.eval("document.documentElement.dataset.cards"), "immersive", "applied before the app runs");
+    await page.waitFor("document.querySelector('.card.photo')");
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    assert.equal(await page.eval("document.getElementById('immersiveCards').checked"), true);
+    await page.click('label[for="immersiveCards"]');
+    assert.equal(await page.eval("document.documentElement.dataset.cards"), undefined);
+    assert.equal(await cardBg(), "none");
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
 });

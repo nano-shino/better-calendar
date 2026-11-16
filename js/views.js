@@ -1,6 +1,6 @@
 // Day, Week and Month as lists: one event after another, grouped by day.
 // Events with a photo get a large photo card; the rest get a compact plain card.
-import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration, tileLetter } from "./util.js";
+import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration } from "./util.js";
 import { photoFor, cachedPhoto, expectsPhoto } from "./photos.js";
 import { overlapUnits } from "./overlaps.js";
 
@@ -11,7 +11,7 @@ const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComp
 const painted = new Set();
 
 // Fades a photo into el's .ph child once it has loaded. Instant if already known.
-// A photo card's artwork (.c-art) also paints the blurred backdrop behind the card.
+// A photo card's artwork (.c-art) also paints the blurred backdrop that immersive cards show.
 export function paintPhoto(el, ev, size = "thumb") {
   const ph = el.querySelector(":scope > .ph");
   if (!ph) return;
@@ -104,7 +104,8 @@ export function renderList(days, events, ctx, mode) {
         h("span", { class: "dh-dow", text: isToday ? "Today" : fmt.dow.format(day) }),
         h("span", { class: "dh-num", text: day.getDate() }),
         h("span", { class: "dh-mon", text: fmt.monthShort.format(day) }));
-    if (isToday) head.append(sunArc(now));
+    // The sun arc needs Day view's room; at Week and Month size it reads as a smudge.
+    if (isToday && mode === "day") head.append(sunArc(now));
     if (mode !== "day" && ctx.openDay) {
       head.classList.add("link");
       head.setAttribute("role", "button");
@@ -349,7 +350,15 @@ function spreadRun(li, open) {
   }
 }
 
-// big: photo card, the whole photo beside the text over a blurred copy of it. Otherwise a compact row, with a small thumbnail when the event has a photo.
+// A plain card's tile: a calendar glyph in the calendar's color, in the slot a
+// thumbnail takes, so titles line up down the day.
+function calTile() {
+  const el = h("span", { class: "c-tile", "aria-hidden": "true" });
+  el.innerHTML = `<svg class="ic" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>`;
+  return el;
+}
+
+// big: photo card, the whole photo beside the text (over a blurred copy of it, with immersive cards). Otherwise a compact row, with a small thumbnail when the event has a photo.
 // opts.top: the card is tucked over the one before it, whose title is opts.overlaps.
 // opts.stacked: part of a run of overlapping cards, which a tap spreads apart.
 function card(ev, now, ctx, lead, opts = {}) {
@@ -364,7 +373,7 @@ function card(ev, now, ctx, lead, opts = {}) {
   const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
   const tile = !big && !thumb ? (ev.untitled
     ? h("span", { class: "c-tile c-tile-blank", "aria-hidden": "true" })
-    : h("span", { class: "c-tile", "aria-hidden": "true", text: tileLetter(ev.title) })) : null;
+    : calTile()) : null;
   const el = h("button", {
     class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}${opts.top ? " dk-top" : ""}${done ? " done" : ""}`,
     type: "button",
@@ -388,9 +397,11 @@ function card(ev, now, ctx, lead, opts = {}) {
       live ? h("span", { class: "c-live", text: "Now" }) : null,
       h("span", { text: live ? `${duration(ev.end - now)} left` : whenLabel(ev) })) : null,
     h("span", { class: `c-title${ev.untitled ? " c-title-untitled" : ""}`, text: ev.title }),
-    sub || opts.atTime ? h("span", { class: "c-loc" },
-      opts.atTime ? h("span", { class: "c-at", text: sub ? `${opts.atTime} · ` : opts.atTime }) : null, sub) : null),
-  h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
+    // One meta line: how long and where, then which calendar.
+    h("span", { class: "c-meta" },
+      sub || opts.atTime ? h("span", { class: "c-loc" },
+        opts.atTime ? h("span", { class: "c-at", text: sub ? `${opts.atTime} · ` : opts.atTime }) : null, sub) : null,
+      h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })))));
   if (big) paintPhoto(art, ev);
   else if (thumb) paintPhoto(thumb, ev);
   return el;

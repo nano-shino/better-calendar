@@ -160,6 +160,13 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW, routes = n
       await sleep(150);
       await page.waitFor(ready, { timeout: 10000 });
     },
+    /** A real reload. goto() to the same page with only a different #hash stays on the
+     *  same document, so it can't test what survives a reload. */
+    async reload({ ready = "document.querySelector('#title')?.textContent.trim()" } = {}) {
+      await page.eval("window.__beforeReload = true");
+      await send("Page.reload", {});
+      await page.waitFor(`!window.__beforeReload && (${ready})`, { timeout: 10000 });
+    },
     /** Wait until no CSS/Web animations are running (list slide-ins, panel). */
     async settle(timeout = 2000) {
       await page.waitFor("document.getAnimations().filter((a) => a.playState === 'running' && !String(a.animationName || '').match(/sweep|pulse/)).length === 0", { timeout }).catch(() => {});

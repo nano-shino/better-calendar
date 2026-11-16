@@ -37,6 +37,26 @@ export function setTheme(id) {
   applyTheme(id);
 }
 
+// Immersive cards (Advanced): photo cards as dark slabs over a blurred copy of their
+// photo, instead of paper. Also a display choice on this device, applied before the
+// first paint by the same inline script, as html[data-cards="immersive"].
+const CARDS_KEY = "bd:immersive";
+
+export const immersiveCards = () => loadJSON(CARDS_KEY, false) === true;
+
+export function applyCards(on = immersiveCards()) {
+  if (on) document.documentElement.dataset.cards = "immersive";
+  else delete document.documentElement.dataset.cards;
+}
+
+export function setImmersiveCards(on) {
+  saveJSON(CARDS_KEY, !!on);
+  applyCards(!!on);
+}
+
 systemDark.addEventListener("change", () => { if (currentTheme() === "auto") applyTheme(); });
 // Another tab changed it: follow along.
-addEventListener("storage", (e) => { if (e.key === KEY) applyTheme(); });
+addEventListener("storage", (e) => {
+  if (e.key === KEY) applyTheme();
+  if (e.key === CARDS_KEY) applyCards();
+});

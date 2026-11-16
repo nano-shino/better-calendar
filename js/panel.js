@@ -215,7 +215,7 @@ function googleLinks(ev) {
   if (ev.busy) return h("div", { class: "pv-links" }, h("a", { class: "btn small", href: view, target: "_blank", rel: "noopener", text: "Open in Google Calendar" }));
   return h("div", { class: "pv-links" },
     h("a", { class: "btn small", href: edit, target: "_blank", rel: "noopener", text: "Edit in Google Calendar" }),
-    h("a", { class: "link-btn", href: view, target: "_blank", rel: "noopener", text: "View" }));
+    h("a", { class: "btn small", href: view, target: "_blank", rel: "noopener", text: "View" }));
 }
 
 function setCredit(el, p) {

@@ -80,13 +80,13 @@ test("a reload asks for events at once, without waiting for the calendar list", 
   assert.ok(await page.eval(`!!document.querySelector('.card[data-id="lunch"]')`), "the user's own events show");
 });
 
-test("events without a title read as Busy or No title, with a hatched tile instead of a letter", async () => {
+test("events without a title read as Busy or No title, with a hatched tile instead of the calendar glyph", async () => {
   const page = await open("desktop");
   const cardOf = (id) => page.eval(`(() => { const c = document.querySelector('.card[data-id="${id}"]');
-    const t = c.querySelector('.c-tile'); return { title: c.querySelector('.c-title').textContent, blank: !!t?.classList.contains('c-tile-blank'), letter: t?.textContent ?? null, photo: !!c.querySelector('.ph, .c-thumb') }; })()`);
-  assert.deepEqual(await cardOf("busy17"), { title: "Busy", blank: true, letter: "", photo: false });
-  assert.deepEqual(await cardOf("blank"), { title: "No title", blank: true, letter: "", photo: false });
-  assert.equal((await cardOf("plan")).letter, "Q");
+    const t = c.querySelector('.c-tile'); return { title: c.querySelector('.c-title').textContent, blank: !!t?.classList.contains('c-tile-blank'), glyph: !!t?.querySelector('svg'), photo: !!c.querySelector('.ph, .c-thumb') }; })()`);
+  assert.deepEqual(await cardOf("busy17"), { title: "Busy", blank: true, glyph: false, photo: false });
+  assert.deepEqual(await cardOf("blank"), { title: "No title", blank: true, glyph: false, photo: false });
+  assert.equal((await cardOf("plan")).glyph, true);
 
   await page.click('.card[data-id="busy17"]');
   await page.waitFor("document.getElementById('pvTitle')?.textContent === 'Busy'");

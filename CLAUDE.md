@@ -81,6 +81,11 @@ so changing the sample data means updating the e2e expectations.
   matches images first.
 - `signed-in.e2e.mjs` runs the real (non-`?mock`) boot against a fake Firebase,
   Google sign-in and Calendar API with realistic delays: use it for loading jank.
+- Nothing may hang the run: each e2e test fails after 15 s and each file is
+  killed (with its Chrome) after 2 min (`tests/e2e/run.mjs`); unit tests after 5 s.
+  A test that leaves its own browser open can't hang the run, but close it in `finally`.
+- `page.goto()` to the same page with another `#hash` doesn't reload. Use
+  `page.reload()` to test what survives a reload.
 - `page.swipe()` holds still before lifting. A fling makes Chrome swallow the next tap.
 - Fix a UI bug together with an e2e test. For visual changes, look at the
   screenshots at all three sizes.

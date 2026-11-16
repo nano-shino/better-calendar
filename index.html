@@ -13,13 +13,15 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="css/app.css">
   <script>
-    // The saved theme before the first paint, so a dark theme never flashes white.
-    // Same key, default and Auto rule as js/theme.js.
+    // The saved theme and card style before the first paint, so a dark theme never
+    // flashes white. Same keys, defaults and Auto rule as js/theme.js.
     (function () {
-      var t = "light";
+      var t = "light", im = false;
       try { t = JSON.parse(localStorage.getItem("bd:theme")) || t; } catch (e) {}
+      try { im = JSON.parse(localStorage.getItem("bd:immersive")) === true; } catch (e) {}
       if (t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       document.documentElement.dataset.theme = t;
+      if (im) document.documentElement.dataset.cards = "immersive";
     })();
   </script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -76,11 +78,11 @@
       </div>
 
       <div class="bar-r">
-        <button type="button" class="btn" id="todayBtn">Today</button>
         <div class="step">
           <button type="button" class="icon-btn" id="prevBtn" aria-label="Previous">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 6l-6 6 6 6"/></svg>
           </button>
+          <button type="button" class="step-today" id="todayBtn">Today</button>
           <button type="button" class="icon-btn" id="nextBtn" aria-label="Next">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6l6 6-6 6"/></svg>
           </button>

@@ -21,7 +21,7 @@ test("a repeating event gets one big photo card per week; the rest are compact r
 test("events whose title doesn't name a kind of event stay plain (no guessed photo)", async () => {
   const [planning] = await cardsTitled("Quarterly planning");
   assert.match(planning, /plain/);
-  assert.match(planning, /has-thumb/); // lettered tile keeps titles aligned
+  assert.match(planning, /has-thumb/); // the calendar tile keeps titles aligned
   assert.equal(await page.eval("document.querySelector('.card .c-tile') !== null"), true);
 });
 
@@ -94,7 +94,7 @@ test("Noon and Evening markers sit before the first event of each part of the da
 
 const slotOf = (title, day = "Mon Nov 16 2026") => `[...document.querySelectorAll('[data-day="${day}"] .slot')].find((li) => li.querySelector('.c-title').textContent === ${JSON.stringify(title)})`;
 
-test("each event sits beside a time column: big start, AM/PM, end, in its hour's sky", async () => {
+test("each event sits beside a time column: start, AM/PM, end, in its hour's sky", async () => {
   const coffee = await page.eval(`(() => { const li = ${slotOf("Coffee with Alex")};
     return { time: li.querySelector('.ck-time').textContent, ap: li.querySelector('.ck-ap').textContent,
       end: li.querySelector('.ck-end').textContent, cls: li.className, sub: li.querySelector('.c-loc').textContent,
@@ -104,7 +104,7 @@ test("each event sits beside a time column: big start, AM/PM, end, in its hour's
   assert.match(coffee.cls, /sky-afternoon/);
   assert.equal(coffee.sub, "1 h · Corner Café", "the card says how long, not when");
   assert.equal(coffee.when, false);
-  assert.ok(coffee.size >= 20, `start time is big, got ${coffee.size}px`);
+  assert.ok(coffee.size >= 16, `start time leads the column, got ${coffee.size}px`);
   assert.ok(coffee.cardLeft > coffee.clockRight, "the column sits beside the card");
   assert.match(await page.eval(`${slotOf("Team standup")}.className`), /sky-morning/);
   assert.match(await page.eval(`${slotOf("Gym")}.className`), /sky-evening/);
@@ -150,11 +150,16 @@ test("the Now mark is a sun by day and a moon at night", async () => {
   } finally { await night.close(); }
 });
 
-test("only today's header has the sun arc, placed by the time of day", async () => {
-  assert.equal(await page.eval("document.querySelectorAll('.dh-sun').length"), 1);
-  assert.equal(await page.eval("!!document.querySelector('.day.today .day-h .dh-sun')"), true);
-  // 10:00 is 4 h into the 6 AM to 9 PM arc.
-  assert.equal(await page.eval("document.querySelector('.dh-sun').dataset.progress"), "0.267");
+test("today's header has the sun arc in Day view only, placed by the time of day", async () => {
+  assert.equal(await page.eval("document.querySelectorAll('.dh-sun').length"), 0, "Week has no room for it");
+  const day = await launch();
+  try {
+    await day.goto("?mock#day");
+    assert.equal(await day.eval("!!document.querySelector('.day.today .day-h .dh-sun')"), true);
+    // 10:00 is 4 h into the 6 AM to 9 PM arc.
+    assert.equal(await day.eval("document.querySelector('.dh-sun').dataset.progress"), "0.267");
+    assert.deepEqual(day.errors, []);
+  } finally { await day.close(); }
 });
 
 test("past events are grey until hovered", async () => {
@@ -279,8 +284,7 @@ test("consecutive free days collapse into one row", async () => {
   const free = await page.eval("[...document.querySelectorAll('.free-run .fr-days')].map((e) => e.textContent)");
   assert.deepEqual(free, ["17–19 Nov"]);
   assert.equal(await page.eval("document.querySelector('.day.today .day-empty').textContent"), "Nothing planned today");
-  // An empty today keeps its Now line, with the sun (10 AM), and the header's sun arc.
+  // An empty today keeps its Now line, with the sun (10 AM).
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.day.today .cards > li')].map((li) => li.className)"), ["now-mark st-first st-last", "day-empty"]);
   assert.ok(await page.eval("!!document.querySelector('.day.today .now-mark .nm-sun:not(.night) .nm-disc')"));
-  assert.ok(await page.eval("!!document.querySelector('.day.today .day-h .dh-sun')"));
 });

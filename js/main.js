@@ -9,7 +9,7 @@ import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
 import { isDone, setDone } from "./done.js";
 import { setupGestures } from "./gestures.js";
-import { THEMES, currentTheme, setTheme, applyTheme } from "./theme.js";
+import { THEMES, currentTheme, setTheme, applyTheme, immersiveCards, setImmersiveCards } from "./theme.js";
 
 // index.html already set the attribute; this also sets the browser bar color.
 applyTheme();
@@ -546,6 +546,9 @@ async function toggleCalendar(key, on) {
 // ---------------- accounts popover ----------------
 const pop = $("#acctPop");
 
+// Whether Advanced was left open, so the menu re-rendering doesn't fold it away.
+let advOpen = false;
+
 function openPop() {
   const prof = store.getProfile();
   const kids = [];
@@ -575,12 +578,6 @@ function openPop() {
     resetMemo();
     render(true);
   });
-  kids.push(h("section", { class: "pa" },
-    h("label", { class: "sw-row", for: "autoPhotos" },
-      h("span", { class: "sw-txt" },
-        h("strong", { text: "Automatic photos" }),
-        h("span", { class: "sub", text: "For events whose title clearly says what they are, like gym, flight, dinner or birthday. Other events stay plain until you pick a photo." })),
-      autoToggle, h("span", { class: "sw", "aria-hidden": "true" }))));
 
   const chosen = currentTheme();
   kids.push(h("section", { class: "pa th" },
@@ -599,6 +596,26 @@ function openPop() {
         h("span", { class: "kw-word", text: `“${k.word}”` }),
         h("button", { class: "link-btn", type: "button", text: "Remove", onclick: async () => { await removeKeyword(k.word).catch((e) => toast(e.message)); render(true); openPop(); } })))));
   }
+  // Advanced: choices most people never need, folded away until asked for.
+  const immersive = h("input", { type: "checkbox", id: "immersiveCards", role: "switch", checked: immersiveCards() });
+  immersive.addEventListener("change", () => setImmersiveCards(immersive.checked));
+  const adv = h("details", { class: "pa adv", open: advOpen },
+    h("summary", { class: "adv-sum" }, h("span", { text: "Advanced" }),
+      h("span", { class: "adv-chev", "aria-hidden": "true" })),
+    h("div", { class: "adv-body" },
+      h("label", { class: "sw-row", for: "autoPhotos" },
+        h("span", { class: "sw-txt" },
+          h("strong", { text: "Automatic photos" }),
+          h("span", { class: "sub", text: "For events whose title clearly says what they are, like gym, flight, dinner or birthday. Other events stay plain until you pick a photo." })),
+        autoToggle, h("span", { class: "sw", "aria-hidden": "true" })),
+      h("label", { class: "sw-row", for: "immersiveCards" },
+        h("span", { class: "sw-txt" },
+          h("strong", { text: "Immersive photo cards" }),
+          h("span", { class: "sub", text: "Photo cards as dark panels over a blurred copy of their photo." })),
+        immersive, h("span", { class: "sw", "aria-hidden": "true" }))));
+  adv.addEventListener("toggle", () => { advOpen = adv.open; });
+  kids.push(adv);
+
   kids.push(h("div", { class: "pa-foot" },
     S.signedIn ? h("button", { class: "link-btn muted", type: "button", text: "Sign out", onclick: signOut }) : h("span"),
     h("a", { class: "link-btn muted", href: "privacy.html", text: "Privacy" })));

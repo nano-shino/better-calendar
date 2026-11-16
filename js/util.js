@@ -96,12 +96,6 @@ export function relative(ms) {
   return `in ${d} day${d > 1 ? "s" : ""}`;
 }
 
-// A card's tile letter: the first letter or digit, so "(Draft) plan" gets "D", not "(".
-export function tileLetter(title) {
-  const m = /[\p{L}\p{N}]/u.exec(String(title || ""));
-  return m ? m[0].toLocaleUpperCase() : "•";
-}
-
 // An animation's end, or its planned length plus a little if the page is hidden
 // (hidden pages pause animations, and a pending .finished would stall what waits on it).
 export function ended(anim) {
