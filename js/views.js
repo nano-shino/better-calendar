@@ -118,14 +118,14 @@ export function renderList(days, events, ctx, mode) {
     let nowPlaced = !isToday || hasLive;
     let part = 0, prev = null;
     for (const unit of overlapUnits(list, day)) {
-      const ev = unit.evs[0];
+      const { ev } = unit;
       // Noon and Evening markers go before the first event that starts in each,
       // and on the right side of the Now line: before it once the hour has passed.
       // Never between overlapping cards, which would pull them apart.
       let mark = null;
       if (!ev.allDay) {
         const p = partOf(ev.start < day ? day : ev.start);
-        if (p > part) { part = p; if (unit.head) mark = partMark(day, PARTS[p - 1], now); }
+        if (p > part) { part = p; if (!unit.tucked) mark = partMark(day, PARTS[p - 1], now); }
       }
       if (!nowPlaced && !ev.allDay && ev.start > now) {
         if (mark?.classList.contains("past")) { ol.append(mark); mark = null; }
@@ -134,12 +134,17 @@ export function renderList(days, events, ctx, mode) {
       }
       if (mark) ol.append(mark);
       const from = ev.allDay ? day : ev.start < day ? day : ev.start;
-      const below = unit.tucked ? prev?.evs[0] : null;
+      const below = unit.tucked ? prev?.ev : null;
       prev = unit;
-      const li = h("li", { class: `slot sky-${ev.allDay ? "allday" : skyOf(from)}${unit.evs.every((e) => e.end <= now) ? " past" : ""}${unit.tucked ? " dk-tuck" : ""}${unit.under ? " dk-under" : ""}`,
-        dataset: { sky: ev.allDay ? "dawn" : skyOf(from) } }, clock(ev, day));
-      const opts = { top: unit.tucked || unit.evs.length > 1, overlaps: below?.title };
-      li.append(unit.evs.length > 1 ? deck(unit.evs, now, ctx, isLead, opts) : card(ev, now, ctx, isLead(ev), opts));
+      const stacked = unit.tucked || unit.under;
+      const li = h("li", { class: `slot sky-${ev.allDay ? "allday" : skyOf(from)}${ev.end <= now ? " past" : ""}${unit.tucked ? " dk-tuck" : ""}${unit.under ? " dk-under" : ""}${unit.sameStart ? " dk-same" : ""}`,
+        dataset: { sky: ev.allDay ? "dawn" : skyOf(from), ...(stacked ? { run: unit.run } : {}), ...(unit.tucked ? { at: unit.at.toFixed(3) } : {}) },
+        vars: unit.tucked ? { "--dk-depth": unit.depth } : null },
+        clock(ev, day), card(ev, now, ctx, isLead(ev), { top: unit.tucked, stacked, overlaps: below?.title,
+          // shown in the card when the time column has no room for it (see stackRuns)
+          atTime: unit.tucked && !unit.sameStart ? fmt.time.format(from) : null }));
+      // Spread out, tapping beside the cards (the time column) stacks them again.
+      if (stacked) li.addEventListener("click", (e) => { if (li.classList.contains("dk-open") && !e.target.closest(".card")) spreadRun(li, false); });
       ol.append(li);
     }
     if (!nowPlaced && list.some((e) => !e.allDay)) ol.append(nowMark(now));
@@ -157,7 +162,36 @@ export function renderList(days, events, ctx, mode) {
       h("strong", { text: ctx.empty?.title || (mode === "day" ? "A free day" : "Nothing planned") }),
       h("span", { text: ctx.empty?.text || "Events you add in Google Calendar will show up here." })));
   }
+  watchStacks(root);
   return root;
+}
+
+// A tucked card sits as far down the card below it as its start is into that event,
+// so events that start together start at the same height. Card heights are only
+// known once laid out (photo cards are taller), so this runs whenever a stacked row
+// changes size, which includes the first layout after the list is attached.
+const MIN_OVER = 22; // a card starting near the end still covers this much
+const LABEL_ROOM = 30; // below this, the start time moves from the column into the card
+function stackRuns(root) {
+  for (const li of root.querySelectorAll(".cards > li.dk-tuck")) {
+    const below = li.previousElementSibling, h = below?.offsetHeight;
+    if (!h) continue;
+    const gap = parseFloat(getComputedStyle(li.parentElement).rowGap) || 0;
+    const o = Math.min(Math.round(+li.dataset.at * h), h - MIN_OVER);
+    li.style.setProperty("--dk-pull", `${o - h - gap}px`);
+    li.classList.toggle("dk-notime", o < LABEL_ROOM);
+  }
+}
+function watchStacks(root) {
+  const rows = root.querySelectorAll(".cards > li[data-run]");
+  if (!rows.length) return;
+  let attached = false;
+  const ro = new ResizeObserver(() => {
+    if (!root.isConnected) { if (attached) ro.disconnect(); return; }
+    attached = true;
+    stackRuns(root);
+  });
+  rows.forEach((li) => ro.observe(li));
 }
 
 // Landmarks in the day, so the eye finds afternoon and evening plans without
@@ -294,39 +328,31 @@ function whenLabel(ev) {
   return timeRange(ev.start, ev.end);
 }
 
-// Events that start together, stacked: the front card, and behind it a strip
-// with the next one's title. Tapping the strip spreads the deck into plain cards.
-function deck(evs, now, ctx, isLead, opts) {
-  const [front, ...rest] = evs;
-  const at = (e) => (+e.start === +front.start ? null : fmt.time.format(e.start));
-  const more = rest.length > 1 ? ` +${rest.length - 1}` : "";
-  const spread = h("div", { class: "dk-rest", hidden: true },
-    rest.map((e) => card(e, now, ctx, isLead(e), { at: at(e) })));
-  const peek = h("button", {
-    class: `dk-peek${rest.every((e) => e.end <= now) ? " past" : ""}`, type: "button",
-    vars: { "--c": rest[0].color },
-    "aria-label": `Show ${rest.map((e) => e.title).join(", ")}, at the same time as ${front.title}`,
-    onclick: () => {
-      peek.hidden = true;
-      spread.hidden = false;
-      const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (!reduce) spread.animate([{ opacity: 0, transform: "translateY(-24px)" }, { opacity: 1, transform: "none" }], { duration: 300, easing: "cubic-bezier(0.22, 1, 0.36, 1)" });
-      spread.querySelector(".card")?.focus({ preventScroll: true });
-    },
-  }, h("span", { class: "dk-peek-title", text: rest[0].title + more }));
-  return h("div", { class: "dk-stack" }, card(front, now, ctx, isLead(front), opts), peek, spread);
+// Overlapping cards stack (tucked over each other). A tap on a stacked card spreads
+// its whole run apart instead of opening it, so each card can be read whole; spread,
+// cards open as usual.
+function spreadRun(li, open) {
+  // Animate only this change, not every render's first placement.
+  const ol = li.parentElement;
+  ol.classList.add("dk-anim");
+  clearTimeout(ol._dkAnim);
+  ol._dkAnim = setTimeout(() => ol.classList.remove("dk-anim"), 450);
+  for (const r of li.parentElement.querySelectorAll(`:scope > li[data-run="${li.dataset.run}"]`)) {
+    r.classList.toggle("dk-open", open);
+    r.querySelector(".card")?.setAttribute("aria-expanded", String(open));
+  }
 }
 
 // big: photo card, the whole photo beside the text over a blurred copy of it. Otherwise a compact row, with a small thumbnail when the event has a photo.
-// opts.top: the card lies over another (tucked, or the front of a deck). opts.overlaps:
-// the title of the card it lies on. opts.at: a start time to show, for a deck's later starter.
+// opts.top: the card is tucked over the one before it, whose title is opts.overlaps.
+// opts.stacked: part of a run of overlapping cards, which a tap spreads apart.
 function card(ev, now, ctx, lead, opts = {}) {
   const hasPhoto = expectsPhoto(ev);
   const big = hasPhoto && lead;
   const live = !ev.allDay && ev.start <= now && ev.end > now;
   const past = ev.end <= now;
   const multi = ev.allDay ? ev.end - ev.start > 86400000 * 1.5 : !sameDay(ev.start, new Date(ev.end - 1));
-  const sub = [opts.at, !ev.allDay && !live && !multi && ev.end > ev.start ? duration(ev.end - ev.start) : null, ev.location?.split("\n")[0]].filter(Boolean).join(" · ");
+  const sub = [!ev.allDay && !live && !multi && ev.end > ev.start ? duration(ev.end - ev.start) : null, ev.location?.split("\n")[0]].filter(Boolean).join(" · ");
   const art = big ? h("span", { class: "c-art" }, h("span", { class: "ph" })) : null;
   const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
   const tile = !big && !thumb ? (ev.untitled
@@ -338,7 +364,12 @@ function card(ev, now, ctx, lead, opts = {}) {
     dataset: { id: ev.id },
     vars: { "--c": ev.color, "--progress": live ? ((now - ev.start) / (ev.end - ev.start)).toFixed(3) : 0 },
     "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}${opts.overlaps ? `, overlaps ${opts.overlaps}` : ""}`,
-    onclick: (e) => ctx.openEvent(ev, e.currentTarget),
+    "aria-expanded": opts.stacked ? "false" : null,
+    onclick: (e) => {
+      const li = e.currentTarget.closest("li[data-run]");
+      if (li && !li.classList.contains("dk-open")) spreadRun(li, true);
+      else ctx.openEvent(ev, e.currentTarget);
+    },
   },
   big ? h("span", { class: "c-glow", "aria-hidden": "true" }) : null,
   art,
@@ -350,7 +381,8 @@ function card(ev, now, ctx, lead, opts = {}) {
       live ? h("span", { class: "c-live", text: "Now" }) : null,
       h("span", { text: live ? `${duration(ev.end - now)} left` : whenLabel(ev) })) : null,
     h("span", { class: `c-title${ev.untitled ? " c-title-untitled" : ""}`, text: ev.title }),
-    sub ? h("span", { class: "c-loc", text: sub }) : null),
+    sub || opts.atTime ? h("span", { class: "c-loc" },
+      opts.atTime ? h("span", { class: "c-at", text: sub ? `${opts.atTime} · ` : opts.atTime }) : null, sub) : null),
   h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
   if (big) paintPhoto(art, ev);
   else if (thumb) paintPhoto(thumb, ev);

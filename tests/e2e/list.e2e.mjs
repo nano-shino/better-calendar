@@ -86,7 +86,7 @@ test("Noon and Evening markers sit before the first event of each part of the da
   assert.equal(by["Fri Nov 20 2026"], "Trip to Portugal / Flight to Lisbon / Team standup / Evening / Gym / Seafood dinner");
   // A day whose first event is in the evening still says so.
   assert.equal(by["Sun Nov 15 2026"], "Evening / Family dinner");
-  assert.equal(by["Thu Nov 19 2026"], "Team standup / Noon / Design review");
+  assert.equal(by["Thu Nov 19 2026"], "Team standup / Noon / Design review / Interview");
   // At 10:00 today's Noon is still ahead, so it isn't dimmed.
   assert.equal(await page.eval("document.querySelector('.day.today .pm-noon').classList.contains('past')"), false);
   assert.equal(await page.eval("document.querySelector('.day.today .pm-noon').getAttribute('aria-label')"), "Noon, from 12:00 PM");
@@ -177,37 +177,71 @@ async function openAndClose(x, y, title) {
   await page.settle();
 }
 
-test("an event that starts during another lies over that card's bottom edge, never its text", async () => {
+test("an event that starts during another lies on it, as far down as its start is into that event", async () => {
   const id = await page.eval(`${cardOf("Call with Jo")}.dataset.id`);
   await page.center(`.card[data-id="${id}"]`);
   const call = await rectOf(cardOf("Call with Jo"));
   const plan = await rectOf(cardOf("Quarterly planning"));
-  const planText = await rectOf(`${cardOf("Quarterly planning")}.querySelector('.c-body')`);
-  assert.ok(call.top < plan.bottom - 15, `overlaps the card above (${call.top} vs ${plan.bottom})`);
-  assert.ok(call.top >= planText.bottom, "but not its title or subtitle");
-  assert.ok(call.left > plan.left + 10, "nudged right, so it reads as lying on top");
+  // Planning runs 10:00-12:00 and the call starts at 11:30: three quarters in,
+  // but never so low that less than 22 px of the two overlap.
+  const h = plan.bottom - plan.top;
+  const want = Math.min(Math.round(0.75 * h), h - 22);
+  assert.ok(Math.abs(call.top - plan.top - want) <= 1, `${want} px down, got ${call.top - plan.top}`);
+  assert.ok(Math.abs(call.left - plan.left - 48) <= 1, "shifted right one level, so the tile below shows");
   assert.match(await page.eval(`${cardOf("Call with Jo")}.getAttribute('aria-label')`), /overlaps Quarterly planning/);
-  // Both stay tappable: the top card where they overlap, the one below above that.
-  await openAndClose(call.x, plan.bottom - 8, "Call with Jo");
-  await openAndClose(plan.x, plan.top + 20, "Quarterly planning");
 });
 
-test("events that start together stack; tapping the strip behind spreads them", async () => {
-  const day = `document.querySelector('[data-day="Thu Nov 19 2026"]')`;
-  await page.center(`[data-day="Thu Nov 19 2026"] .dk-peek`);
-  const front = await rectOf(`${day}.querySelector('.dk-stack > .card')`);
-  const peek = await rectOf(`${day}.querySelector('.dk-peek')`);
-  assert.equal(await page.eval(`${day}.querySelector('.dk-stack > .card .c-title').textContent`), "Design review", "the longer one is in front");
-  assert.equal(await page.eval(`${day}.querySelector('.dk-peek').textContent`), "Interview");
-  assert.ok(Math.abs(peek.bottom - front.bottom - 30) < 3, `a 30 px strip shows below the front card, got ${peek.bottom - front.bottom}`);
-  assert.equal(await page.eval(`${day}.querySelector('.dk-rest').hidden`), true);
-  await page.clickAt(peek.x, peek.bottom - 12);
-  await page.waitFor(`${day}.querySelector('.dk-peek').hidden && !${day}.querySelector('.dk-rest').hidden`);
+test("a tap spreads a stack apart, spread cards open, and the time column stacks them again", async () => {
+  const isOpen = () => page.eval("document.body.classList.contains('panel-open')");
+  const spread = () => page.eval(`[...${cardOf("Call with Jo")}.closest('ol').querySelectorAll('li[data-run]')].map((li) => li.classList.contains('dk-open'))`);
+  let call = await rectOf(cardOf("Call with Jo"));
+  let plan = await rectOf(cardOf("Quarterly planning"));
+  // Tapping either card of the stack spreads it instead of opening anything.
+  await page.clickAt(call.x, plan.bottom - 8);
   await page.settle();
-  assert.equal(await page.eval(`document.activeElement.querySelector('.c-title')?.textContent`), "Interview");
-  const interview = await rectOf(`${day}.querySelector('.dk-rest .card')`);
-  assert.ok(interview.top >= front.bottom, "spread below the front card");
-  await openAndClose(interview.x, (interview.top + interview.bottom) / 2, "Interview");
+  assert.equal(await isOpen(), false);
+  assert.deepEqual(await spread(), [true, true]);
+  assert.equal(await page.eval(`${cardOf("Call with Jo")}.getAttribute('aria-expanded')`), "true");
+  call = await rectOf(cardOf("Call with Jo"));
+  plan = await rectOf(cardOf("Quarterly planning"));
+  assert.ok(call.top >= plan.bottom + 6, "no longer overlapping");
+  assert.ok(Math.abs(call.left - plan.left) < 1, "lined up again");
+  // Spread, each card opens as usual.
+  await openAndClose(call.x, (call.top + call.bottom) / 2, "Call with Jo");
+  await openAndClose(plan.x, (plan.top + plan.bottom) / 2, "Quarterly planning");
+  // The time column beside the run stacks it again.
+  const clock = await rectOf(`${cardOf("Quarterly planning")}.closest('li').querySelector('.c-clock')`);
+  await page.clickAt(clock.x, clock.top + 12);
+  await page.settle();
+  assert.deepEqual(await spread(), [false, false]);
+  assert.equal(await isOpen(), false);
+  call = await rectOf(cardOf("Call with Jo"));
+  plan = await rectOf(cardOf("Quarterly planning"));
+  assert.ok(call.top < plan.bottom - 15, "overlapping again");
+});
+
+test("events that start together start at the same height, the shorter one on top", async () => {
+  const order = await page.eval(`[...document.querySelectorAll('[data-day="Thu Nov 19 2026"] li[data-run]')].map((li) => li.querySelector('.c-title').textContent + (li.classList.contains('dk-tuck') ? ' (tucked)' : ''))`);
+  assert.deepEqual(order, ["Design review", "Interview (tucked)"]);
+  const review = await rectOf(cardOf("Design review"));
+  const interview = await rectOf(cardOf("Interview"));
+  assert.ok(Math.abs(interview.top - review.top) <= 1, `same height, got ${interview.top} vs ${review.top}`);
+  assert.ok(interview.left - review.left >= 47, "the card below still shows its tile");
+  // One shared start time in the column; the one on top doesn't repeat it.
+  const vis = await page.eval(`getComputedStyle(${cardOf("Interview")}.closest('li').querySelector('.ck-time')).visibility`);
+  assert.equal(vis, "hidden");
+  assert.equal(await page.eval(`${cardOf("Interview")}.querySelector('.c-at')`), null);
+});
+
+test("a start time with no room in the time column shows in the card instead", async () => {
+  // The hike runs 8:00-14:00 and the market starts at 9:00: a sixth of the way down.
+  const li = `${cardOf("Farmers market")}.closest('li')`;
+  await page.waitFor(`${li}.classList.contains('dk-notime')`);
+  assert.equal(await page.eval(`getComputedStyle(${li}.querySelector('.ck-time')).visibility`), "hidden");
+  assert.equal(await page.eval(`getComputedStyle(${cardOf("Farmers market")}.querySelector('.c-at')).display`), "inline");
+  assert.match(await page.eval(`${cardOf("Farmers market")}.querySelector('.c-at').textContent`), /^9:00\sAM · $/);
+  // Flight 7:15-13:40, standup at 9:30: far enough down for the time to stay in the column.
+  assert.equal(await page.eval(`document.querySelector('[data-day="Fri Nov 20 2026"] li.dk-tuck').classList.contains('dk-notime')`), false);
 });
 
 test("a multi-day all-day event appears once, on its first day in range", async () => {

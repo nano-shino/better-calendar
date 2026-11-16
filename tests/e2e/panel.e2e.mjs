@@ -90,7 +90,11 @@ test("clicking the scrim closes the panel", async () => {
 });
 
 test("an event without a photo has a slim header band", async () => {
-  await page.click(await cardSel("Quarterly planning"));
+  // Quarterly planning has a call tucked over it: the first tap spreads them, the second opens it.
+  const sel = await cardSel("Quarterly planning");
+  await page.click(sel);
+  await page.waitFor(`document.querySelector('${sel}').closest('li').classList.contains('dk-open')`);
+  await page.click(sel);
   await page.waitFor("document.querySelector('.pv-photo.is-empty')");
   assert.equal(await page.eval("getComputedStyle(document.querySelector('.pv-photo')).height"), "60px");
 });
