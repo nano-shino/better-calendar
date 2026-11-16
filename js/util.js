@@ -92,6 +92,14 @@ export function tileLetter(title) {
   return m ? m[0].toLocaleUpperCase() : "•";
 }
 
+// An animation's end, or its planned length plus a little if the page is hidden
+// (hidden pages pause animations, and a pending .finished would stall what waits on it).
+export function ended(anim) {
+  const t = anim.effect?.getComputedTiming?.();
+  const ms = (t?.endTime ?? 500) + 150;
+  return Promise.race([anim.finished.catch(() => {}), new Promise((r) => setTimeout(r, ms))]);
+}
+
 export function hash(s) {
   let x = 2166136261;
   for (const c of String(s)) { x ^= c.codePointAt(0); x = Math.imul(x, 16777619); }

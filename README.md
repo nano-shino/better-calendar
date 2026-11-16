@@ -20,7 +20,11 @@ token, encrypted. It never sees your events.
 - **Automatic photos** come from a hand-checked set. They appear only when
   the title clearly names a kind of event, such as gym, flight, dinner or
   birthday. Nothing is guessed, and you can turn them off in the avatar menu.
-- **Keys:** `D` `W` `M` views, `←` `→` move, `T` today, `Esc` close. On phones, swipe.
+- **Done:** swipe a card sideways to mark it done: with a finger, a mouse drag or a
+  two-finger trackpad swipe. The panel's Done button and `X` work too.
+  Done events leave the list; the check beside Day / Week / Month shows them, with Undo.
+- **Keys:** `D` `W` `M` views, `←` `→` move, `T` today, `X` done, `C` completed, `Esc` close.
+  On phones, swipe a day header to move, and pull the event sheet down to close it.
 
 ## Development
 

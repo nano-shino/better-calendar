@@ -8,7 +8,8 @@ import { tokens, CAL_SCOPE } from "./google.js";
 const V = "12.18.0";
 const CDN = `https://www.gstatic.com/firebasejs/${V}`;
 
-const blankProfile = () => ({ accounts: [], hidden: [], rules: { event: {}, series: {}, keywords: [] }, view: null, autoPhotos: true });
+// done: events you marked as completed, as "<iCalUID>|<start ms>" -> when you did it (ms).
+const blankProfile = () => ({ accounts: [], hidden: [], rules: { event: {}, series: {}, keywords: [] }, view: null, autoPhotos: true, done: {} });
 
 export const configured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
 
@@ -37,6 +38,7 @@ function sanitize(p) {
     },
     view: p?.view || null,
     autoPhotos: p?.autoPhotos !== false,
+    done: p?.done && typeof p.done === "object" && !Array.isArray(p.done) ? p.done : {},
   };
 }
 

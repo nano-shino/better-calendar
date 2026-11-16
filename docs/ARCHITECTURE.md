@@ -21,6 +21,7 @@ users/{uid}
   hidden:     ["<account>|<calendarId>"]           calendars switched off
   rules:      { event: {id: Pick}, series: {seriesId: Pick}, keywords: [{ word, pick }] }
   autoPhotos: boolean
+  done:       { "<iCalUID>|<start ms>": markedAt }      events marked done; no titles or other event data
 
 users/{uid}/photos/{id}   { data: "data:image/jpeg;base64,..." }
 
@@ -84,6 +85,25 @@ responses.
 6. Otherwise none, which gives a plain card
 
 Openverse search is used only in the picker.
+
+## Done
+
+`js/done.js` keeps a key per occurrence, the same `uid|start` that dedupes a
+meeting across accounts, so marking it done in one account hides it in all.
+Marks for events more than 400 days old are dropped on the next change. The
+list shows events that aren't done; `S.tab = "done"` shows only those that are,
+for the same range.
+
+`js/gestures.js`: a sideways drag that starts on a card (touch, mouse, or a
+two-finger trackpad swipe as wheel `deltaX`) moves the card and, past about a
+third of its width, marks it done (on the Completed tab, not done). A sideways
+touch swipe anywhere else changes the range. Cards have `touch-action: pan-y`,
+so vertical scrolling stays native.
+
+Marking done never jumps: `leave()` in `main.js` fades the card and folds its row
+(or its day) closed, then `renderSmooth()` re-renders and animates every row
+from where it was (FLIP, matched by event id). Waits on animations go through
+`ended()`, because a hidden tab pauses them and `.finished` would never come.
 
 ## Panel
 

@@ -32,11 +32,17 @@
     <div class="bar-in">
       <h1 id="title" class="title" aria-live="polite"></h1>
 
-      <div class="seg" id="seg" data-view="week" role="group" aria-label="View">
-        <span class="seg-ind" aria-hidden="true"></span>
-        <button type="button" data-v="day" aria-pressed="false">Day</button>
-        <button type="button" data-v="week" aria-pressed="false">Week</button>
-        <button type="button" data-v="month" aria-pressed="false">Month</button>
+      <div class="seg-row">
+        <div class="seg" id="seg" data-view="week" role="group" aria-label="View">
+          <span class="seg-ind" aria-hidden="true"></span>
+          <button type="button" data-v="day" aria-pressed="false">Day</button>
+          <button type="button" data-v="week" aria-pressed="false">Week</button>
+          <button type="button" data-v="month" aria-pressed="false">Month</button>
+        </div>
+        <button type="button" class="icon-btn done-btn" id="doneBtn" aria-pressed="false" aria-label="Completed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M8.2 12.3l2.6 2.6 5-5.2"/></svg>
+          <span class="db-n" hidden></span>
+        </button>
       </div>
 
       <div class="bar-r">

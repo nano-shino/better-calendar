@@ -202,6 +202,23 @@ export async function launch({ viewport = "desktop", now = FIXED_NOW, routes = n
       await sleep(120);
       await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     },
+    /** Drag with the left mouse button held, in small steps (pointer events, like a real mouse). */
+    async drag(x1, y1, x2, y2, steps = 10) {
+      await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x1, y: y1 });
+      await send("Input.dispatchMouseEvent", { type: "mousePressed", x: x1, y: y1, button: "left", buttons: 1, clickCount: 1 });
+      for (let i = 1; i <= steps; i++) {
+        await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: x1 + ((x2 - x1) * i) / steps, y: y1 + ((y2 - y1) * i) / steps, button: "left", buttons: 1 });
+        await sleep(16);
+      }
+      await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: x2, y: y2, button: "left", buttons: 0, clickCount: 1 });
+    },
+    /** A trackpad's two-finger scroll: a run of wheel events at one point. */
+    async wheel(x, y, deltaX, deltaY = 0, steps = 8) {
+      for (let i = 0; i < steps; i++) {
+        await send("Input.dispatchMouseEvent", { type: "mouseWheel", x, y, deltaX: deltaX / steps, deltaY: deltaY / steps });
+        await sleep(16);
+      }
+    },
     async key(k) {
       const vk = KEYS[k] ?? k.toUpperCase().charCodeAt(0);
       const text = k.length === 1 ? k : k === "Enter" ? "\r" : undefined;

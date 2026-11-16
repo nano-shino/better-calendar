@@ -85,8 +85,9 @@ export function renderList(days, events, ctx, mode) {
     // Multi-day all-day events are listed once: on their first day in this range.
     const list = eventsOn(day, events).filter((e) => !e.allDay || sameDay(day, e.start < rangeStart ? rangeStart : e.start));
     const isToday = sameDay(day, today);
-    if (!list.length && !isToday) {
-      if (mode === "week") freeRun.push(day);
+    // The Completed tab lists only days with something done: no free days, no forced today.
+    if (!list.length && (!isToday || ctx.completed)) {
+      if (mode === "week" && !ctx.completed) freeRun.push(day);
       continue;
     }
     flushFree();
@@ -115,7 +116,7 @@ export function renderList(days, events, ctx, mode) {
     const ol = h("ol", { class: "cards" });
     // The "Now" line separates past from upcoming; a live event shows "Now" itself.
     const hasLive = list.some((e) => !e.allDay && e.start <= now && e.end > now);
-    let nowPlaced = !isToday || hasLive;
+    let nowPlaced = !isToday || hasLive || !!ctx.completed;
     let part = 0, prev = null;
     for (const unit of overlapUnits(list, day)) {
       const { ev } = unit;
@@ -159,10 +160,13 @@ export function renderList(days, events, ctx, mode) {
   // ctx.empty: signed out, no calendar connected yet. Empty days would read
   // as "you have nothing planned", so show only the note.
   if (!shown || ctx.empty) {
-    root.replaceChildren(h("div", { class: "agenda-empty" },
-      h("strong", { text: ctx.empty?.title || (mode === "day" ? "A free day" : "Nothing planned") }),
-      h("span", { text: ctx.empty?.text || "Events you add in Google Calendar will show up here." })));
+    const empty = ctx.empty || (ctx.completed
+      ? { title: "Nothing done yet", text: `Events you mark as done ${mode === "day" ? "on this day" : `this ${mode}`} show up here. Swipe a card, or open it and choose Done.` }
+      : { title: mode === "day" ? "A free day" : "Nothing planned", text: "Events you add in Google Calendar will show up here." });
+    root.replaceChildren(h("div", { class: "agenda-empty" }, h("strong", { text: empty.title }), h("span", { text: empty.text })));
   }
+  if (ctx.completed) root.prepend(h("div", { class: "agenda-tab" }, h("h2", { class: "at-title", text: "Completed" }),
+    ctx.leaveTab ? h("button", { class: "link-btn at-back", type: "button", text: "Back to plans", onclick: ctx.leaveTab }) : null));
   watchStacks(root);
   return root;
 }
@@ -173,7 +177,8 @@ export function renderList(days, events, ctx, mode) {
 // changes size, which includes the first layout after the list is attached.
 const MIN_OVER = 22; // a card starting near the end still covers this much
 const LABEL_ROOM = 30; // below this, the start time moves from the column into the card
-function stackRuns(root) {
+// Also exported, so a re-render can place stacks before measuring for its animation.
+export function stackRuns(root) {
   for (const li of root.querySelectorAll(".cards > li.dk-tuck")) {
     const below = li.previousElementSibling, h = below?.offsetHeight;
     if (!h) continue;
@@ -352,6 +357,7 @@ function card(ev, now, ctx, lead, opts = {}) {
   const big = hasPhoto && lead;
   const live = !ev.allDay && ev.start <= now && ev.end > now;
   const past = ev.end <= now;
+  const done = !!ctx.done?.(ev);
   const multi = ev.allDay ? ev.end - ev.start > 86400000 * 1.5 : !sameDay(ev.start, new Date(ev.end - 1));
   const sub = [!ev.allDay && !live && !multi && ev.end > ev.start ? duration(ev.end - ev.start) : null, ev.location?.split("\n")[0]].filter(Boolean).join(" · ");
   const art = big ? h("span", { class: "c-art" }, h("span", { class: "ph" })) : null;
@@ -360,11 +366,11 @@ function card(ev, now, ctx, lead, opts = {}) {
     ? h("span", { class: "c-tile c-tile-blank", "aria-hidden": "true" })
     : h("span", { class: "c-tile", "aria-hidden": "true", text: tileLetter(ev.title) })) : null;
   const el = h("button", {
-    class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}${opts.top ? " dk-top" : ""}`,
+    class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}${opts.top ? " dk-top" : ""}${done ? " done" : ""}`,
     type: "button",
     dataset: { id: ev.id },
     vars: { "--c": ev.color, "--progress": live ? ((now - ev.start) / (ev.end - ev.start)).toFixed(3) : 0 },
-    "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}${opts.overlaps ? `, overlaps ${opts.overlaps}` : ""}`,
+    "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}${opts.overlaps ? `, overlaps ${opts.overlaps}` : ""}${done ? ", done" : ""}`,
     "aria-expanded": opts.stacked ? "false" : null,
     onclick: (e) => {
       const li = e.currentTarget.closest("li[data-run]");

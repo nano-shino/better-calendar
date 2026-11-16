@@ -17,7 +17,56 @@ export function setupPanel(context) {
     if (e.detail > 1 || performance.now() - openedAt < 350) return;
     closePanel();
   });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && current) { e.preventDefault(); closePanel(); } });
+  document.addEventListener("keydown", (e) => {
+    if (!current || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape") { e.preventDefault(); closePanel(); return; }
+    if (e.key.toLowerCase() === "x" && !e.target.closest?.("input, textarea, [contenteditable]")) { e.preventDefault(); ctx.toggleDone(current); }
+  });
+  setupSheetDrag();
+}
+
+// On a phone the panel is a bottom sheet: pulling it down from the top closes it.
+// Only while its content is scrolled to the top, so it never fights scrolling.
+const isSheet = () => matchMedia("(max-width: 720px)").matches;
+function setupSheetDrag() {
+  let d = null;
+  panel.addEventListener("touchstart", (e) => {
+    d = null;
+    if (!isSheet() || e.touches.length !== 1 || panel.classList.contains("closing")) return;
+    if (($(".pv-scroll", panel)?.scrollTop || 0) > 0 || e.target.closest("input, textarea")) return;
+    const t = e.touches[0];
+    d = { x: t.clientX, y: t.clientY, dy: 0, on: false, lastY: t.clientY, lastT: performance.now(), v: 0 };
+  }, { passive: true });
+  panel.addEventListener("touchmove", (e) => {
+    if (!d) return;
+    const t = e.touches[0];
+    const dx = t.clientX - d.x, dy = t.clientY - d.y;
+    if (!d.on) {
+      // Decided on the first move: down and mostly vertical drags the sheet, anything else scrolls.
+      if (dy > 0 && dy >= Math.abs(dx)) { d.on = true; panel.classList.add("dragging"); }
+      else { d = null; return; }
+    }
+    if (e.cancelable) e.preventDefault();
+    const now = performance.now();
+    d.v = (t.clientY - d.lastY) / Math.max(1, now - d.lastT);
+    d.lastY = t.clientY; d.lastT = now;
+    d.dy = Math.max(0, dy);
+    panel.style.transform = `translateY(${d.dy}px)`;
+    scrim.style.opacity = String(Math.max(0, 1 - d.dy / panel.offsetHeight));
+  }, { passive: false });
+  const end = () => {
+    if (!d?.on) { d = null; return; }
+    const { dy, v } = d;
+    d = null;
+    panel.classList.remove("dragging");
+    if (dy > Math.min(140, panel.offsetHeight * 0.25) || (dy > 40 && v > 0.5)) { closePanel(); return; }
+    panel.style.transition = "transform 0.3s var(--spring)";
+    panel.style.transform = "";
+    scrim.style.opacity = "";
+    setTimeout(() => { panel.style.transition = ""; }, 320);
+  };
+  panel.addEventListener("touchend", end, { passive: true });
+  panel.addEventListener("touchcancel", end, { passive: true });
 }
 
 export const panelEvent = () => current;
@@ -34,6 +83,8 @@ export function openPanel(ev) {
   build(ev);
   panel.classList.remove("closing");
   scrim.classList.remove("closing");
+  panel.style.transform = "";
+  scrim.style.opacity = "";
   panel.hidden = false;
   scrim.hidden = false;
   document.body.classList.add("panel-open");
@@ -61,6 +112,8 @@ export function closePanel() {
     if (current) return;
     panel.hidden = true;
     scrim.hidden = true;
+    panel.style.transform = "";
+    scrim.style.opacity = "";
     panel.classList.remove("closing");
     scrim.classList.remove("closing");
   }, reduceMotion() ? 0 : 300);
@@ -127,7 +180,7 @@ function build(ev, keepScroll, message = "") {
     ev.meet ? h("p", { class: "pv-row" }, icon("video"), h("a", { href: ev.meet, target: "_blank", rel: "noopener", text: "Join video call" })) : null,
     ev.attendees > 1 ? h("p", { class: "pv-row" }, icon("people"), h("span", { text: `${ev.attendees} guests` })) : null,
     desc ? h("div", { class: "pv-desc" }, linkify(desc)) : null,
-    googleLinks(ev),
+    actions(ev),
   );
 
   // A busy block is someone else's hidden event: nothing to choose a photo for.
@@ -136,6 +189,16 @@ function build(ev, keepScroll, message = "") {
   panel.replaceChildren(scroll);
   panel.setAttribute("aria-labelledby", "pvTitle");
   if (keepScroll) scroll.scrollTop = scrollTop;
+}
+
+// Done (or Not done) first, then the links into Google Calendar.
+function actions(ev) {
+  const done = ctx.isDone(ev);
+  const btn = h("button", { class: `btn small pv-done${done ? " is-done" : ""}`, type: "button", "aria-pressed": String(done),
+    title: `${done ? "Mark not done" : "Mark done"} (X)`, onclick: () => ctx.toggleDone(ev) },
+  icon(done ? "undo" : "check"), done ? "Not done" : "Done");
+  const links = googleLinks(ev);
+  return h("div", { class: "pv-links" }, btn, links ? [...links.childNodes] : null);
 }
 
 // Links into Google Calendar for the account that owns the event. The API's
@@ -286,6 +349,8 @@ const ICONS = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>',
 };
 ICONS.close = '<path d="M6 6l12 12M18 6L6 18"/>';
+ICONS.check = '<path d="M5 12.5l4.5 4.5L19 7.5"/>';
+ICONS.undo = '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/>';
 // SVG must be created through the parser to get the SVG namespace.
 export function icon(name) {
   const t = document.createElement("template");

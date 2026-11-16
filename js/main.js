@@ -1,12 +1,14 @@
 // App shell: header, navigation, data loading, accounts.
-import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, loadJSON, saveJSON } from "./util.js";
-import { renderList } from "./views.js";
+import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, loadJSON, saveJSON, ended } from "./util.js";
+import { renderList, stackRuns } from "./views.js";
 import { setupPanel, openPanel, closePanel, refreshPanel, panelEvent, icon } from "./panel.js";
 import * as store from "./store.js";
 import * as google from "./google.js";
 import { googleClientId, tokenWorkerUrl } from "./config.js";
 import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
+import { isDone, setDone } from "./done.js";
+import { setupGestures } from "./gestures.js";
 
 
 
@@ -25,6 +27,8 @@ const S = {
   // Accounts from the last session, shown while Firebase restores it, so a
   // signed-in user never sees the sample calendar flash first.
   pending: null,
+  // "plan": what's still to do. "done": only what you marked as completed, same range.
+  tab: "plan",
   // Signed out, the calendar starts empty. "Try the demo" fills it with
   // sample events until sign-in or "Exit demo" (kept for the browser tab).
   demo: (() => { try { return sessionStorage.getItem("bd:demo") === "1"; } catch { return false; } })(),
@@ -151,14 +155,16 @@ const setView = (view, anchor = S.target.anchor) => {
 // starts at today when it is in view, or at the top.
 function render(keepScroll) {
   const prevScroll = stage.scrollTop;
-  const events = S.events.filter(visible);
-  const ctx = { openEvent: (e) => openPanel(e), openDay: (d) => setView("day", startOfDay(d)) };
+  const done = S.tab === "done";
+  const events = S.events.filter((e) => visible(e) && isDone(e) === done);
+  const ctx = { openEvent: (e) => openPanel(e), openDay: (d) => setView("day", startOfDay(d)), done: isDone, completed: done, leaveTab: () => setTab("plan") };
   if (!S.signedIn && !S.demo) ctx.empty = { title: "Your calendar goes here", text: store.configured ? "Sign in with Google to see your events, or try the demo." : "Connect Firebase to see your events, or try the demo." };
   const { start, end } = rangeOf(S.view, S.anchor);
   const days = [];
   for (let d = start; d < end; d = addDays(d, 1)) days.push(d);
   stage.replaceChildren(renderList(days, events, ctx, S.view));
   stage.dataset.view = S.view;
+  stage.dataset.tab = S.tab;
   if (keepScroll) stage.scrollTop = prevScroll;
   else scrollToToday(false);
   renderHeader();
@@ -198,7 +204,94 @@ function renderHeader() {
   for (const b of document.querySelectorAll("#seg [data-v]")) b.setAttribute("aria-pressed", String(b.dataset.v === S.view));
   const today = startOfDay(new Date());
   $("#todayBtn").disabled = S.view === "day" && sameDay(S.anchor, today);
+  renderDoneBtn();
   renderAvatars();
+}
+
+// The Completed tab's button: a check, with how many in this range are done.
+function renderDoneBtn() {
+  const btn = $("#doneBtn");
+  const n = S.events.filter((e) => visible(e) && isDone(e)).length;
+  const on = S.tab === "done";
+  btn.setAttribute("aria-pressed", String(on));
+  btn.setAttribute("aria-label", n ? `Completed (${n})` : "Completed");
+  btn.title = on ? "Back to your plans (C)" : "Completed (C)";
+  const badge = $(".db-n", btn);
+  badge.textContent = n > 99 ? "99+" : String(n);
+  badge.hidden = !n || on;
+}
+
+function setTab(tab) {
+  if (S.tab === tab) return;
+  S.tab = tab;
+  closePanel();
+  render(false);
+  if (!reduceMotion()) stage.firstElementChild?.classList.add("enter-fade");
+}
+
+// Mark an event done or not done, with Undo in the toast. Its card fades and folds
+// away, then the list glides into its new places (see renderSmooth); a returning
+// card fades in. delay: let the panel slide out first, so the card is seen leaving.
+async function toggleDone(ev, on = !isDone(ev), { delay = 0, quiet = false } = {}) {
+  const saved = setDone(ev, on);
+  saved.catch((err) => toast(err.message));
+  if (delay && !reduceMotion()) await new Promise((r) => setTimeout(r, delay));
+  await leave(ev);
+  renderSmooth();
+  if (quiet) return;
+  toast(on ? `Done: ${ev.title}` : `Not done: ${ev.title}`, { label: "Undo", run: () => toggleDone(ev, !on, { quiet: true }) });
+}
+
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+const EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
+
+// Fold the event's row closed (or its whole day, if it was the day's only event).
+// Rows below follow as the space closes, instead of jumping when the list re-renders.
+async function leave(ev) {
+  const card = stage.querySelector(`.card[data-id="${CSS.escape(ev.id)}"]`);
+  if (!card || reduceMotion()) return;
+  let row = card.closest(".cards > li");
+  const day = row.closest(".day");
+  // Today keeps its section on the plan list (with "Nothing planned today"), so only its row goes.
+  const lastOfDay = day && day.querySelectorAll(".card[data-id]").length === 1 && (S.tab === "done" || !day.classList.contains("today"));
+  if (lastOfDay) row = day;
+  const cs = getComputedStyle(row);
+  const gap = row === day ? 0 : parseFloat(getComputedStyle(row.parentElement).rowGap) || 0;
+  row.style.overflow = "hidden";
+  // A swiped card has already flown off; only its row is left to fold.
+  if (row === day || !row.classList.contains("sw-on")) (row === day ? row : card).animate([{ opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.96)" }], { duration: 180, easing: EASE, fill: "forwards" });
+  await ended(row.animate([
+    { height: `${row.offsetHeight}px`, paddingTop: cs.paddingTop, paddingBottom: cs.paddingBottom, borderTopWidth: cs.borderTopWidth, marginBottom: cs.marginBottom },
+    { height: "0px", paddingTop: "0px", paddingBottom: "0px", borderTopWidth: "0px", marginBottom: `${-gap}px` },
+  ], { duration: 280, delay: 80, easing: EASE, fill: "forwards" }));
+}
+
+// Re-render in place and animate what moved from where it was (FLIP), so nothing
+// jumps: rows are matched by event id, markers and headers by their day.
+function flipKey(el) {
+  const day = el.closest(".day")?.dataset.day || "";
+  if (el.classList.contains("day-h")) return `h|${day}`;
+  if (el.classList.contains("free-run")) return `f|${el.textContent}`;
+  const id = el.querySelector(":scope > .card")?.dataset.id;
+  return id ? `e|${id}` : `m|${day}|${el.classList[0]}|${el.classList[1] || ""}`;
+}
+const FLIP = ".day-h, .free-run, .cards > li";
+function renderSmooth() {
+  if (reduceMotion()) { render(true); return; }
+  const before = new Map();
+  for (const el of stage.querySelectorAll(FLIP)) before.set(flipKey(el), el.getBoundingClientRect().top);
+  render(true);
+  const root = stage.firstElementChild;
+  if (root) stackRuns(root); // tucked cards take their place now, not after the next frame
+  for (const el of stage.querySelectorAll(FLIP)) {
+    const was = before.get(flipKey(el));
+    if (was === undefined) {
+      if (before.size) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, delay: 120, easing: EASE, fill: "backwards" });
+      continue;
+    }
+    const dy = was - el.getBoundingClientRect().top;
+    if (Math.abs(dy) > 0.5) el.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 320, easing: EASE });
+  }
 }
 
 function renderAvatars() {
@@ -435,13 +528,16 @@ function closePop() {
 
 // ---------------- toast ----------------
 let toastTimer;
-function toast(msg) {
+// action: { label, run } adds a button (Undo), and keeps the toast up a little longer.
+function toast(msg, action = null) {
   const t = $("#toast");
-  t.textContent = msg;
+  t.replaceChildren(h("span", { class: "toast-txt", text: msg }));
+  if (action) t.append(h("button", { class: "toast-btn", type: "button", text: action.label, onclick: () => { hide(); action.run(); } }));
+  const hide = () => { clearTimeout(toastTimer); t.classList.add("out"); setTimeout(() => { if (t.classList.contains("out")) t.hidden = true; }, 300); };
   t.hidden = false;
   t.classList.remove("out");
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.classList.add("out"); setTimeout(() => (t.hidden = true), 300); }, 4200);
+  toastTimer = setTimeout(hide, action ? 6000 : 4200);
 }
 
 // ---------------- wiring ----------------
@@ -449,6 +545,7 @@ function wire() {
   $("#prevBtn").addEventListener("click", () => nav(-1));
   $("#nextBtn").addEventListener("click", () => nav(1));
   $("#todayBtn").addEventListener("click", goToday);
+  $("#doneBtn").addEventListener("click", () => setTab(S.tab === "done" ? "plan" : "done"));
   for (const b of document.querySelectorAll("#seg [data-v]")) b.addEventListener("click", () => setView(b.dataset.v));
   $("#acctBtn").addEventListener("click", (e) => { e.stopPropagation(); pop.hidden ? openPop() : closePop(); });
   document.addEventListener("click", (e) => {
@@ -466,7 +563,12 @@ function wire() {
     if (e.target.closest("input, textarea, [contenteditable]")) return;
     const k = e.key.toLowerCase();
     if (panelEvent()) return;
-    if (k === "arrowleft" || k === "j") nav(-1);
+    const focused = e.target.closest?.(".card[data-id]");
+    if (k === "x" && focused) {
+      const ev = S.events.find((x) => x.id === focused.dataset.id);
+      if (ev) toggleDone(ev);
+    } else if (k === "c") setTab(S.tab === "done" ? "plan" : "done");
+    else if (k === "arrowleft" || k === "j") nav(-1);
     else if (k === "arrowright" || k === "k") nav(1);
     else if (k === "t") goToday();
     else if (k === "d") setView("day");
@@ -476,25 +578,26 @@ function wire() {
     e.preventDefault();
   });
 
-  // Horizontal swipe to move between days, weeks or months.
-  let sx = 0, sy = 0, tracking = false;
-  stage.addEventListener("touchstart", (e) => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; tracking = e.touches.length === 1; }, { passive: true });
-  stage.addEventListener("touchend", (e) => {
-    if (!tracking) return;
-    tracking = false;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - sx, dy = t.clientY - sy;
-    if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) nav(dx < 0 ? 1 : -1);
-  }, { passive: true });
+  // Swipe a card (touch, mouse or trackpad) to mark it done; swipe elsewhere to move between days, weeks or months.
+  setupGestures(stage, {
+    nav,
+    swiped: (id) => {
+      const ev = S.events.find((x) => x.id === id);
+      if (ev) toggleDone(ev); else render(true);
+    },
+  });
 
   // Keep "now" markers and past events current.
-  setInterval(() => { if (!document.hidden) render(true); }, 60000);
+  // Not while a card is being swiped: re-rendering would drop it from under the finger.
+  setInterval(() => { if (!document.hidden && !stage.querySelector(".sw-on")) render(true); }, 60000);
   setInterval(() => { if (!document.hidden && S.signedIn) { dropCache(); go({ quiet: true }); } }, 10 * 60 * 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) render(true); });
 
   setupPanel({
     signedIn: () => S.signedIn,
     changed: () => { resetMemo(); render(true); },
+    isDone,
+    toggleDone: (ev) => { closePanel(); toggleDone(ev, undefined, { delay: 200 }); },
   });
 
   store.onProfile(() => {
