@@ -177,10 +177,18 @@ function partMark(day, p, now) {
     h("span", { class: "pm-time", "aria-hidden": "true", text: fmt.hour.format(at) }));
 }
 
+// The Now line's mark on the strip: a sun by day, a crescent moon at night (9 PM to
+// 6 AM, the same span the header's sun arc treats as night).
+const NOW_SUN = '<circle class="nm-disc" cx="12" cy="12" r="5"/><path class="nm-rays" d="M12 1.8v2.4M12 19.8v2.4M1.8 12h2.4M19.8 12h2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/>';
+const NOW_MOON = '<path class="nm-moon" d="M18.3 14.9A7.2 7.2 0 0 1 9.1 5.7a7.2 7.2 0 1 0 9.2 9.2Z"/>';
+
 function nowMark(now) {
+  const night = skyOf(now) === "night";
+  const icon = svg(night ? NOW_MOON : NOW_SUN);
+  icon.setAttribute("class", "nm-ic");
   return h("li", { class: "now-mark", dataset: { sky: skyOf(now) }, "aria-label": `Now, ${fmt.time.format(now)}` },
     h("span", { class: "nm-pill", text: "Now" }), h("span", { class: "nm-time", text: fmt.time.format(now) }),
-    h("span", { class: `nm-sun${skyOf(now) === "night" ? " night" : ""}`, "aria-hidden": "true" }));
+    h("span", { class: `nm-sun${night ? " night" : ""}`, "aria-hidden": "true" }, icon));
 }
 
 // The sky strip: a muted track behind the duration bars. Each row paints its own

@@ -138,6 +138,17 @@ test("the sky strip is grey up to Now and on past days, colored after", async ()
   assert.ok(sun < 1.5, `sun is centered on the bar line, off by ${sun}`);
 });
 
+test("the Now mark is a sun by day and a moon at night", async () => {
+  const icon = (p) => p.eval("(() => { const s = document.querySelector('.day.today .nm-sun'); return { sun: !!s.querySelector('.nm-disc'), moon: !!s.querySelector('.nm-moon') }; })()");
+  assert.deepEqual(await icon(page), { sun: true, moon: false }, "10:00 AM is a sun");
+  const night = await launch({ now: "2026-11-16T22:00:00" });
+  try {
+    await night.goto("?mock#week");
+    assert.deepEqual(await icon(night), { sun: false, moon: true }, "10:00 PM is a moon");
+    assert.deepEqual(night.errors, []);
+  } finally { await night.close(); }
+});
+
 test("only today's header has the sun arc, placed by the time of day", async () => {
   assert.equal(await page.eval("document.querySelectorAll('.dh-sun').length"), 1);
   assert.equal(await page.eval("!!document.querySelector('.day.today .day-h .dh-sun')"), true);

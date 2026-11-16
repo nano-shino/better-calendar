@@ -663,9 +663,11 @@ a.link-btn { text-decoration: none; }
   display: grid; grid-template-columns: var(--clock-w) minmax(0, 1fr); gap: 0 10px;
 }
 .sky-night, .part-mark.pm-night { --sky: #6b6fc0; --sky-ink: #3f4391; --sky-tint: #e8e9f8; }
-.sky-dawn { --sky: #f2a35b; --sky-ink: #9a520f; --sky-tint: #fdeedd; }
-.sky-morning { --sky: #eebc3a; --sky-ink: #805b00; --sky-tint: #fcf1cf; }
-.sky-afternoon, .part-mark.pm-noon { --sky: #5aa5e6; --sky-ink: #1d5d99; --sky-tint: #e3f0fc; }
+/* The tints follow the sun's warmth, not the sky's hue: a pale dawn, a soft yellow
+   morning, the hottest amber in the afternoon, coral at sunset, then indigo. */
+.sky-dawn { --sky: #e89aa9; --sky-ink: #9b3f55; --sky-tint: #fbe8ec; }
+.sky-morning { --sky: #f0cb4f; --sky-ink: #7a5a00; --sky-tint: #fdf5d6; }
+.sky-afternoon, .part-mark.pm-noon { --sky: #f5a524; --sky-ink: #8f5300; --sky-tint: #fdeacb; }
 .sky-evening, .part-mark.pm-evening { --sky: #ec7d68; --sky-ink: #a33f2b; --sky-tint: #fde6e0; }
 
 .c-clock { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 10px 10px 9px 0; min-width: 0; text-align: right; }
@@ -719,8 +721,8 @@ a.link-btn { text-decoration: none; }
    the track is unbroken; time already gone is grey. The Now countdown's dotted thread
    takes its place between the Now line and the next event. */
 :root {
-  --strip-night: #d4d6f0; --strip-dawn: #fbe2c8; --strip-morning: #f8eab8;
-  --strip-afternoon: #d5e7f8; --strip-evening: #f9d8cf; --strip-past: #e8eaee;
+  --strip-night: #d4d6f0; --strip-dawn: #f7d9df; --strip-morning: #faefc4;
+  --strip-afternoon: #fbdcae; --strip-evening: #f9d8cf; --strip-past: #e8eaee;
 }
 .cards > li[data-sky] { position: relative; }
 .cards > li[data-sky]::before {
@@ -733,12 +735,16 @@ a.link-btn { text-decoration: none; }
 .now-mark { position: relative; }
 .now-mark .nm-pill { margin-right: 12px; }
 .now-mark .nm-time { padding-left: 4px; }
-/* the sun sits on the track at the Now line */
+/* a sun (or, at night, a moon) sits on the track at the Now line; the paper disc
+   behind it cuts the track so the icon stands clear */
 .nm-sun {
-  position: absolute; z-index: 1; top: 50%; left: calc(var(--clock-w) - 1.5px); width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
-  border-radius: 50%; background: #ffb81f; box-shadow: 0 0 0 2px var(--paper), 0 0 0 6px rgb(255 200 74 / 0.3);
+  position: absolute; z-index: 1; top: 50%; left: calc(var(--clock-w) - 1.5px); width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  display: grid; place-items: center; border-radius: 50%; background: var(--paper);
 }
-.nm-sun.night { background: #c4c6e8; box-shadow: 0 0 0 2px var(--paper), 0 0 0 6px rgb(140 144 210 / 0.25); }
+.nm-ic { width: 20px; height: 20px; }
+.nm-disc { fill: #ffb81f; }
+.nm-rays { fill: none; stroke: #f5a524; stroke-width: 2; stroke-linecap: round; }
+.nm-moon { fill: #8a8dd0; }
 
 /* Today's sun arc, 6 AM to 9 PM */
 .dh-sun { width: 56px; height: 30px; margin-top: 8px; overflow: visible; }

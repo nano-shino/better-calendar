@@ -9,6 +9,15 @@
         "serve"
       ],
       "port": 8000
+    },
+    {
+      "name": "serve-8001",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "tests/serve.mjs",
+        "8001"
+      ],
+      "port": 8001
     }
   ]
 }
