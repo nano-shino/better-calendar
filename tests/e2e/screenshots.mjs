@@ -26,6 +26,9 @@ for (const viewport of Object.keys(VIEWPORTS)) {
   await page.goto("#week");
   await sleep(800);
   shots.push(await page.screenshot(`${viewport}-signed-out`));
+  await page.click("#welcome .wc-demo");
+  await sleep(800);
+  shots.push(await page.screenshot(`${viewport}-demo`));
   if (page.errors.length) console.error(viewport, "console errors:", page.errors);
   await page.close();
 }

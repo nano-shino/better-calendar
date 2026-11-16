@@ -4,7 +4,7 @@ Your Google Calendar as a list of photo cards, grouped by day, in Day, Week or
 Month view. It can show calendars from several Google accounts at once.
 
 **Open it:** https://nano-shino.github.io/better-calendar/. If you don't sign in,
-it shows sample events.
+it starts empty; "Try the demo" fills it with sample events.
 
 Settings and uploaded photos sync through Firebase. Calendar data and access
 tokens stay in your browser. To keep your accounts connected without signing

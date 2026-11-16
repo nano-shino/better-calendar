@@ -25,6 +25,9 @@ const S = {
   // Accounts from the last session, shown while Firebase restores it, so a
   // signed-in user never sees the sample calendar flash first.
   pending: null,
+  // Signed out, the calendar starts empty. "Try the demo" fills it with
+  // sample events until sign-in or "Exit demo" (kept for the browser tab).
+  demo: (() => { try { return sessionStorage.getItem("bd:demo") === "1"; } catch { return false; } })(),
 };
 S.target = { view: S.view, anchor: S.anchor };
 
@@ -77,7 +80,8 @@ async function accountEvents(email, start, end) {
 const MOCK = new URLSearchParams(location.search).has("mock");
 
 async function eventsFor(start, end) {
-  if (!S.signedIn || MOCK) return sampleEvents(start, end);
+  if (!S.signedIn) return S.demo ? sampleEvents(start, end) : [];
+  if (MOCK) return sampleEvents(start, end);
   const lists = await Promise.all(store.getProfile().accounts.map((a) => accountEvents(a.email, start, end)));
   // The same meeting can show up in several of your accounts. Keep one.
   const seen = new Set();
@@ -90,7 +94,7 @@ async function eventsFor(start, end) {
 }
 
 function calendarsList() {
-  if (!S.signedIn) return [{ account: "Sample calendars", cals: sampleCalendars }];
+  if (!S.signedIn) return S.demo ? [{ account: "Sample calendars", cals: sampleCalendars }] : [];
   if (MOCK) return store.getProfile().accounts.map((a, i) => ({ account: a.email, cals: i === 0 ? sampleCalendars.slice(1) : i === 1 ? sampleCalendars.slice(0, 1) : [] }));
   return store.getProfile().accounts.map((a) => ({ account: a.email, cals: S.calendars.get(a.email) || [] }));
 }
@@ -149,6 +153,7 @@ function render(keepScroll) {
   const prevScroll = stage.scrollTop;
   const events = S.events.filter(visible);
   const ctx = { openEvent: (e) => openPanel(e), openDay: (d) => setView("day", startOfDay(d)) };
+  if (!S.signedIn && !S.demo) ctx.empty = { title: "Your calendar goes here", text: store.configured ? "Sign in with Google to see your events, or try the demo." : "Connect Firebase to see your events, or try the demo." };
   const { start, end } = rangeOf(S.view, S.anchor);
   const days = [];
   for (let d = start; d < end; d = addDays(d, 1)) days.push(d);
@@ -245,11 +250,22 @@ function renderWelcome() {
     h("div", { class: "wc-text" },
       // The app name must be visible here: Google's consent-screen review checks the home page for it.
       h("strong", {}, h("span", { class: "wc-long", text: "Better Calendar: a picture for every plan." }), h("span", { class: "wc-short", text: "Better Calendar" })),
-      h("span", {}, store.configured ? "These are sample events. Sign in to see yours, from as many Google accounts as you like. " : "These are sample events. Add your Firebase settings to js/config.js to connect your calendars (see README). ",
+      h("span", {}, (S.demo ? "These are sample events. " : "Your Google Calendar with a photo for every event. ")
+        + (store.configured ? "Sign in to see yours, from as many Google accounts as you like. " : "Add your Firebase settings to js/config.js to connect your calendars (see README). "),
         h("a", { class: "wc-link", href: "privacy.html", text: "Privacy" }))),
+    h("button", { class: "btn wc-demo", type: "button", text: S.demo ? "Exit demo" : "Try the demo", onclick: () => setDemo(!S.demo) }),
     store.configured ? h("button", { class: "btn primary", type: "button", onclick: signIn }, googleMark(), "Sign in with Google") : null,
     close,
   ].filter(Boolean));
+}
+
+function setDemo(on) {
+  S.demo = on;
+  try { on ? sessionStorage.setItem("bd:demo", "1") : sessionStorage.removeItem("bd:demo"); } catch {}
+  closePanel();
+  resetMemo();
+  if (!pop.hidden) openPop();
+  go({ kind: "fade" });
 }
 
 function googleMark() {
@@ -367,7 +383,8 @@ function openPop() {
     }
     kids.push(h("button", { class: "pa-add", type: "button", onclick: addAccount }, h("span", { class: "plus", text: "+" }), "Add another Google account"));
   } else {
-    kids.push(h("section", { class: "pa" }, h("p", { class: "pa-note", text: "Sample calendars" }), calList(sampleCalendars)));
+    if (S.demo) kids.push(h("section", { class: "pa" }, h("p", { class: "pa-note", text: "Sample calendars" }), calList(sampleCalendars)));
+    kids.push(h("button", { class: "btn wide pa-demo", type: "button", text: S.demo ? "Exit demo" : "Try the demo", onclick: () => setDemo(!S.demo) }));
     if (store.configured) kids.push(h("button", { class: "btn primary wide", type: "button", onclick: signIn }, googleMark(), "Sign in with Google"));
   }
 
@@ -526,6 +543,7 @@ async function boot() {
     S.signedIn = !!user;
     if (err) toast("Couldn't read your saved settings from Firestore. Check the security rules in README.");
     if (user) {
+      if (S.demo) { S.demo = false; try { sessionStorage.removeItem("bd:demo"); } catch {} }
       // With the Worker, a missing token is fetched when needed; Reconnect shows only if that fails.
       if (!google.workerUp()) for (const a of store.getProfile().accounts) if (!google.tokens.get(a.email)) S.reconnect.add(a.email);
     } else {

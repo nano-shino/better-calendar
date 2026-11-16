@@ -83,3 +83,16 @@ test("picking a photo for one event doesn't fade the other photos out and in aga
   await page.waitFor(`document.querySelector('.card[data-id="errand"] .ph.shown, .card[data-id="errand"] .c-thumb .ph.shown')`);
   assert.ok(await page.eval("__hidden") <= 1, "only the new photo fades in");
 });
+
+test("a first visit starts with an empty calendar, and the demo survives a reload", async () => {
+  const fake = signedIn({ signedOut: true });
+  const page = await launch({ routes: fake.routes });
+  pages.push(page);
+  await page.send("Page.addScriptToEvaluateOnNewDocument", { source: fake.setup });
+  await page.goto("#week", { ready: "!document.getElementById('welcome').hidden && !!document.querySelector('.agenda-empty')" });
+  assert.equal(await page.eval("document.querySelectorAll('.card').length"), 0, "no sample events");
+  await page.click("#welcome .wc-demo");
+  await page.waitFor("document.querySelectorAll('.card').length > 0");
+  await page.goto("#week", { ready: "document.querySelectorAll('.card').length > 0" });
+  assert.equal(await page.eval("document.querySelector('#welcome .wc-demo').textContent"), "Exit demo");
+});

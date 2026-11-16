@@ -41,7 +41,9 @@ export function sampleEvents(from, to) {
     if (wd === 0) out.push(ev(CALS.home, "Family dinner", d, 18, 30, 20, 30, { series: "s-fam" }));
 
     if (offset === 0) out.push(ev(CALS.life, "Coffee with Alex", d, 15, 0, 16, 0, { location: "Corner Café" }));
-    if (offset === 1) out.push(ev(CALS.work, "Quarterly planning", d, 10, 0, 12, 0, { attendees: 9 }), ev(CALS.work, "Lunch with the team", d, 12, 0, 13, 0));
+    // Overlaps: a call during planning (tucked), an interview at the same time as the design review (a deck).
+    if (offset === 1) out.push(ev(CALS.work, "Quarterly planning", d, 10, 0, 12, 0, { attendees: 9 }), ev(CALS.life, "Call with Jo", d, 11, 30, 11, 45), ev(CALS.work, "Lunch with the team", d, 12, 0, 13, 0));
+    if (offset === 3) out.push(ev(CALS.work, "Interview", d, 15, 0, 15, 45, { attendees: 3 }));
     if (offset === 2) out.push(ev(CALS.life, "Dentist", d, 8, 0, 8, 45, { location: "Smile Dental Clinic" }));
     if (offset === 4) out.push(
       ev(CALS.home, "Flight to Lisbon", d, 7, 15, 13, 40, { location: "City Airport" }),

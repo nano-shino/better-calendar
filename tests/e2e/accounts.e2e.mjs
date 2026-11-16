@@ -62,11 +62,39 @@ test("adding accounts shows two avatars and a count", async () => {
   assert.deepEqual(avatars, ["S", "W", "+2"]);
 });
 
-test("signing out returns to sample events with the welcome card", async () => {
+test("signing out leaves an empty calendar with the welcome card", async () => {
   await page.click("#acctBtn");
   await page.eval("[...document.querySelectorAll('.pop .link-btn')].find((b) => b.textContent === 'Sign out').click()");
   await page.waitFor("getComputedStyle(document.getElementById('welcome')).display !== 'none'");
   assert.match(await page.eval("document.getElementById('welcome').textContent"), /Sign in with Google/);
+  await page.waitFor("!!document.querySelector('.agenda-empty')");
+  const s = await page.state();
+  assert.equal(s.photoCards + s.plainCards, 0, "no sample events");
+  assert.match(await page.eval("document.querySelector('.agenda-empty').textContent"), /try the demo/);
+});
+
+const cards = async () => { const s = await page.state(); return s.photoCards + s.plainCards; };
+
+test("Try the demo shows sample events, and Exit demo empties the calendar again", async () => {
+  await page.click("#welcome .wc-demo");
+  await page.waitFor("document.querySelectorAll('.card').length > 0");
+  assert.ok(await cards() > 0);
+  assert.match(await page.eval("document.getElementById('welcome').textContent"), /sample events/);
+  assert.equal(await page.eval("document.querySelector('#welcome .wc-demo').textContent"), "Exit demo");
+  await page.click("#welcome .wc-demo");
+  await page.waitFor("!!document.querySelector('.agenda-empty')");
+  assert.equal(await cards(), 0);
+});
+
+test("the account menu offers the demo too", async () => {
+  await page.click("#acctBtn");
+  await page.click(".pop .pa-demo");
+  await page.waitFor("document.querySelectorAll('.card').length > 0");
+  assert.equal(await page.eval("document.querySelector('.pop .pa-demo').textContent"), "Exit demo");
+  assert.match(await page.eval("document.getElementById('acctPop').textContent"), /Sample calendars/);
+  await page.click(".pop .pa-demo");
+  await page.waitFor("!!document.querySelector('.agenda-empty')");
+  await page.key("Escape");
 });
 
 // Google's consent-screen review checks that the home page shows the app's name
