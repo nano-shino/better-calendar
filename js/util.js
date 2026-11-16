@@ -41,6 +41,16 @@ export const WEEK_START = (() => {
 })();
 export const startOfWeek = (d) => { const x = startOfDay(d); const diff = (x.getDay() - WEEK_START + 7) % 7; return addDays(x, -diff); };
 
+// What to fetch for [start, end): the whole months it touches, widened to whole
+// weeks, so every Day, Week and Month inside one month comes from one request.
+export function blockOf(start, end) {
+  const last = addDays(end, -1);
+  return {
+    start: startOfWeek(new Date(start.getFullYear(), start.getMonth(), 1)),
+    end: addDays(startOfWeek(new Date(last.getFullYear(), last.getMonth() + 1, 1)), 7),
+  };
+}
+
 const lang = navigator.language;
 export const fmt = {
   time: new Intl.DateTimeFormat(lang, { hour: "numeric", minute: "2-digit" }),

@@ -1,5 +1,5 @@
 // App shell: header, navigation, data loading, accounts.
-import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, loadJSON, saveJSON, ended } from "./util.js";
+import { h, $, startOfDay, addDays, addMonths, startOfWeek, sameDay, fmt, loadJSON, saveJSON, ended, blockOf } from "./util.js";
 import { renderList, stackRuns } from "./views.js";
 import { setupPanel, openPanel, closePanel, refreshPanel, panelEvent, icon } from "./panel.js";
 import * as store from "./store.js";
@@ -54,30 +54,113 @@ function shift(view, anchor, dir) {
 }
 
 // ---------------- data ----------------
+// Events are fetched a month at a time, padded to whole weeks (blockOf), so Day,
+// Week and Month over the same dates share one request and switching is instant.
+// A block older than FRESH is still shown at once, and refetched behind it.
 const FRESH = 5 * 60 * 1000;
+const RETRY = 60 * 1000;
 const visible = (e) => !store.getProfile().hidden.includes(e.calKey);
 
-async function accountEvents(email, start, end) {
-  const key = `${email}|${+start}|${+end}`;
-  const hit = S.cache.get(key);
-  if (hit && Date.now() - hit.t < FRESH) return hit.events;
-  try {
-    let cals = S.calendars.get(email);
-    if (!cals) { cals = await google.listCalendars(email); S.calendars.set(email, cals); }
-    const lists = await Promise.all(cals.map((c) => google.listEvents(c, start, end).catch((err) => {
-      if (err.reauth) throw err;
-      console.warn("Skipped calendar", c.name, err);
-      return [];
-    })));
-    const events = lists.flat();
-    S.cache.set(key, { t: Date.now(), events });
-    S.reconnect.delete(email);
-    return events;
-  } catch (err) {
-    if (err.reauth) { S.reconnect.add(email); return hit ? hit.events : []; }
-    toast(`Couldn't load ${email}: ${err.message}`);
-    return hit ? hit.events : [];
+// S.cache entries: { email, start, end, t, events, loading: Promise|null, retryAt }
+function cachedBlock(email, start, end) {
+  let best = null;
+  for (const b of S.cache.values()) {
+    if (b.email !== email || b.start > start || b.end < end) continue;
+    if (!best || (b.events ? b.t : -1) > (best.events ? best.t : -1)) best = b;
   }
+  return best;
+}
+
+function fetchBlock(b) {
+  b.loading ??= (async () => {
+    try {
+      const cals = await calendarsOf(b.email);
+      const lists = await Promise.all(cals.map((c) => google.listEvents(c, b.start, b.end).catch((err) => {
+        if (err.reauth) throw err;
+        console.warn("Skipped calendar", c.name, err);
+        return [];
+      })));
+      b.events = lists.flat();
+      b.t = Date.now();
+      S.reconnect.delete(b.email);
+    } catch (err) {
+      b.retryAt = Date.now() + RETRY;
+      if (err.reauth) S.reconnect.add(b.email);
+      else toast(`Couldn't load ${b.email}: ${err.message}`);
+      throw err;
+    } finally { b.loading = null; }
+  })();
+  return b.loading;
+}
+
+const within = (events, start, end) => events.filter((e) => e.start < end && (e.end > start || (+e.end === +e.start && e.start >= start)));
+
+async function accountEvents(email, start, end) {
+  let b = cachedBlock(email, start, end);
+  if (!b) {
+    const r = blockOf(start, end);
+    b = { email, start: r.start, end: r.end, t: 0, events: null, loading: null, retryAt: 0 };
+    S.cache.set(`${email}|${+b.start}|${+b.end}`, b);
+  }
+  if (b.events) {
+    // Stale: show it now, refresh behind it, re-render if it is still on screen.
+    if (Date.now() - b.t >= FRESH && !b.loading && Date.now() >= b.retryAt) {
+      fetchBlock(b).then(() => { if (onScreen(b)) go({ quiet: true }); }, () => renderBanner());
+    }
+    return within(b.events, start, end);
+  }
+  await fetchBlock(b).catch(() => {});
+  return b.events ? within(b.events, start, end) : [];
+}
+
+// Whether a block covers what is shown, with no navigation under way.
+function onScreen(b) {
+  if (!S.signedIn || S.pending || S.target.view !== S.view || +S.target.anchor !== +S.anchor) return false;
+  const { start, end } = rangeOf(S.view, S.anchor);
+  return b.start < end && b.end > start;
+}
+
+// Calendar lists are remembered (names and colors, no events), so a returning
+// visit fetches events at once; the list is refreshed behind them.
+const CALS = (email) => `bd:cals:${email.toLowerCase()}`;
+const calsLoading = new Map();
+function calendarsOf(email) {
+  const known = S.calendars.get(email);
+  if (known) return Promise.resolve(known);
+  const saved = loadJSON(CALS(email), null);
+  if (Array.isArray(saved) && saved.length) {
+    S.calendars.set(email, saved);
+    loadCalendars(email).then((fresh) => {
+      if (JSON.stringify(fresh) === JSON.stringify(saved)) return;
+      dropCache(email);
+      go({ quiet: true });
+    }, () => {});
+    return Promise.resolve(saved);
+  }
+  return loadCalendars(email);
+}
+function loadCalendars(email) {
+  if (!calsLoading.has(email)) {
+    calsLoading.set(email, google.listCalendars(email).then((cals) => {
+      S.calendars.set(email, cals);
+      saveJSON(CALS(email), cals);
+      return cals;
+    }).finally(() => calsLoading.delete(email)));
+  }
+  return calsLoading.get(email);
+}
+function forgetCalendars(email) {
+  if (email) { S.calendars.delete(email); try { localStorage.removeItem(CALS(email)); } catch {} return; }
+  S.calendars.clear();
+  try { for (const k of Object.keys(localStorage)) if (k.startsWith("bd:cals:")) localStorage.removeItem(k); } catch {}
+}
+
+// A returning user: start loading their events from the remembered accounts
+// while Firebase is still restoring the session. Only accounts with a live
+// token: getting a new one needs the Firebase ID token.
+function warmUp() {
+  const { start, end } = rangeOf(S.target.view, S.target.anchor);
+  for (const a of S.pending || []) if (a?.email && google.tokens.get(a.email)) accountEvents(a.email, start, end);
 }
 
 // ?mock in the address: fake signed-in state with two accounts, for UI testing.
@@ -124,13 +207,14 @@ async function go({ view = S.target.view, anchor = S.target.anchor, kind = null,
   if (kind && !quiet) animateIn(kind);
   renderBanner();
   refreshPanel(S.events);
-  if (S.signedIn) prefetch(view, anchor);
+  if (S.signedIn) prefetch(anchor);
 }
 
-function prefetch(view, anchor) {
+// The months either side, so stepping across a month edge in any view is instant.
+function prefetch(anchor) {
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 400));
   idle(() => {
-    for (const dir of [1, -1]) { const r = rangeOf(view, shift(view, anchor, dir)); eventsFor(r.start, r.end); }
+    for (const dir of [1, -1]) { const r = rangeOf("month", addMonths(anchor, dir)); eventsFor(r.start, r.end); }
   });
 }
 
@@ -438,7 +522,7 @@ async function removeAccount(email) {
   google.disconnect(email);
   S.reconnect.delete(email);
   dropCache(email);
-  S.calendars.delete(email);
+  forgetCalendars(email);
   openPop();
   go({ quiet: true });
 }
@@ -590,7 +674,8 @@ function wire() {
   // Keep "now" markers and past events current.
   // Not while a card is being swiped: re-rendering would drop it from under the finger.
   setInterval(() => { if (!document.hidden && !stage.querySelector(".sw-on")) render(true); }, 60000);
-  setInterval(() => { if (!document.hidden && S.signedIn) { dropCache(); go({ quiet: true }); } }, 10 * 60 * 1000);
+  // Every 10 minutes, mark everything stale: what is on screen refreshes behind itself.
+  setInterval(() => { if (!document.hidden && S.signedIn) { for (const b of S.cache.values()) b.t = 0; go({ quiet: true }); } }, 10 * 60 * 1000);
   document.addEventListener("visibilitychange", () => { if (!document.hidden) render(true); });
 
   setupPanel({
@@ -625,6 +710,7 @@ async function boot() {
   if (!MOCK && store.configured && Array.isArray(remembered) && remembered.length) {
     S.pending = remembered;
     document.body.classList.add("loading");
+    warmUp();
   }
   renderWelcome();
   go({ quiet: true });
@@ -650,7 +736,7 @@ async function boot() {
       // With the Worker, a missing token is fetched when needed; Reconnect shows only if that fails.
       if (!google.workerUp()) for (const a of store.getProfile().accounts) if (!google.tokens.get(a.email)) S.reconnect.add(a.email);
     } else {
-      S.reconnect.clear(); S.calendars.clear(); dropCache();
+      S.reconnect.clear(); forgetCalendars(); dropCache();
     }
     rememberSession();
     const restoring = !!S.pending;

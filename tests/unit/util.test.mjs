@@ -37,3 +37,20 @@ test("sample events cover a whole week, with repeats sharing a series id", () =>
   assert.ok(standups.every((e) => e.seriesId === "s-standup"));
   assert.ok(events.every((e) => e.end >= e.start));
 });
+
+test("fetch blocks: whole months widened to whole weeks, covering every view inside them", () => {
+  const d = (m, day) => new Date(2026, m - 1, day);
+  const days = (b) => [b.start.toDateString(), b.end.toDateString()];
+  const week = util.startOfWeek;
+  // Day, week and month in November share one block.
+  const nov = util.blockOf(d(11, 1), d(12, 1));
+  assert.deepEqual(util.blockOf(d(11, 16), d(11, 17)), nov);
+  assert.deepEqual(util.blockOf(week(d(11, 16)), util.addDays(week(d(11, 16)), 7)), nov);
+  assert.equal(+nov.start, +week(d(11, 1)));
+  // The last week of the month, which runs into December, is inside it too.
+  const lastWeek = week(d(11, 30));
+  assert.ok(nov.start <= lastWeek && nov.end >= util.addDays(lastWeek, 7), days(nov).join(" – "));
+  // A range across a month edge gets both months.
+  const both = util.blockOf(d(11, 29), d(12, 6));
+  assert.ok(both.start <= d(11, 1) && both.end >= new Date(2027, 0, 1));
+});

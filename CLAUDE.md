@@ -15,6 +15,7 @@ and design rules: [CONTRIBUTING.md](CONTRIBUTING.md).
 npm run serve               # http://localhost:8000/?mock  (Node >= 22, nothing to install)
 npm test                    # unit + headless Chrome (set CHROME_PATH if it isn't found)
 npm run test:e2e -- panel   # only e2e files whose name contains "panel"
+npm run bench               # load and view-switch timings against the signed-in fake
 npm run screenshots         # PNGs at 3 sizes in tests/.artifacts/; REAL_IMAGES=1 loads real photos
 ```
 

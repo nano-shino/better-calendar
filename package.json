@@ -13,6 +13,7 @@
     "test:e2e": "node tests/e2e/run.mjs",
     "screenshots": "node tests/e2e/screenshots.mjs",
     "photos:fetch": "node tools/curate-photos/fetch.mjs",
-    "photos:build": "node tools/curate-photos/build.mjs"
+    "photos:build": "node tools/curate-photos/build.mjs",
+    "bench": "node tests/e2e/perf.bench.mjs"
   }
 }

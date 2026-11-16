@@ -2,7 +2,7 @@
 
 Everything runs in the browser. Firestore keeps the settings that should follow
 you between devices. Calendar events are fetched from Google, cached in memory,
-and never stored. The one server is an optional token Worker that keeps Google
+and never stored (only the calendar list is kept in `localStorage`, see below). The one server is an optional token Worker that keeps Google
 accounts connected (see below).
 
 ```
@@ -36,8 +36,17 @@ uses any more are deleted.
 - Each linked account has its own token. When it is missing or expired,
   `google.js` asks the Worker for a new one. If that fails (or there is no
   Worker), `ReauthError` puts the account in `S.reconnect` and shows a Reconnect button.
-- Events are cached for 5 minutes per account and range. Neighbouring ranges
-  are prefetched when the browser is idle.
+- Events are fetched a month at a time, widened to whole weeks (`blockOf`), so
+  Day, Week and Month over the same dates share one request and switching
+  between them waits for nothing. Requests in flight are shared. The months on
+  either side are prefetched when the browser is idle.
+- A block is fresh for 5 minutes. After that it is still shown at once and
+  refetched behind it; the list re-renders if it is still on screen.
+- Each account's calendar list is kept in `localStorage` (`bd:cals:<email>`:
+  names, colors, no events) and refreshed in the background, so events don't
+  wait for it. Signing out or removing the account deletes it.
+- On a reload, events for the remembered accounts (`bd:session`) that still
+  have a live token start loading at once, while Firebase restores the session.
 - Declined events are dropped. A meeting that is in two accounts is shown once
   (deduplicated by `iCalUID + start`).
 

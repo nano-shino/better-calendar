@@ -9,10 +9,29 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='5' width='26' height='24' rx='6' fill='%23ffffff' stroke='%2316181d' stroke-width='2'/%3E%3Crect x='3' y='5' width='26' height='8' rx='4' fill='%23ef5b4c'/%3E%3Ccircle cx='16' cy='21' r='4' fill='%2316181d'/%3E%3C/svg%3E">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://www.googleapis.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
   <link rel="stylesheet" href="css/app.css">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script type="module" src="js/main.js"></script>
+  <!-- The whole module graph at once, instead of one import level per round trip.
+       Firebase too: store.js would only ask for it after every module has run.
+       The version must match V in js/store.js (a unit test checks both lists). -->
+  <link rel="modulepreload" href="js/util.js">
+  <link rel="modulepreload" href="js/config.js">
+  <link rel="modulepreload" href="js/google.js">
+  <link rel="modulepreload" href="js/store.js">
+  <link rel="modulepreload" href="js/views.js">
+  <link rel="modulepreload" href="js/overlaps.js">
+  <link rel="modulepreload" href="js/panel.js">
+  <link rel="modulepreload" href="js/photos.js">
+  <link rel="modulepreload" href="js/curated.js">
+  <link rel="modulepreload" href="js/sample.js">
+  <link rel="modulepreload" href="js/done.js">
+  <link rel="modulepreload" href="js/gestures.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js">
   <script>
     // If a script failed to load, say so instead of leaving a blank page.
     setTimeout(function () {

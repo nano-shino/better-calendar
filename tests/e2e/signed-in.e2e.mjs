@@ -28,6 +28,7 @@ async function open(viewport, opts) {
   const fake = signedIn(opts);
   const page = await launch({ viewport, routes: fake.routes });
   pages.push(page);
+  page.fake = fake;
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: fake.setup });
   await page.send("Page.addScriptToEvaluateOnNewDocument", { source: RECORD });
   await page.goto("#week", { ready: "document.querySelectorAll('.card').length > 3" });
@@ -48,6 +49,36 @@ for (const viewport of ["desktop", "phone"]) {
     assert.ok(top >= 0 && top < 20, `today is at the top (${top}px)`);
   });
 }
+
+test("Day, Week and Month for the same dates come from one request: switching waits for nothing", async () => {
+  const page = await open("desktop");
+  const calls = page.fake.calendarCalls;
+  // Let the idle prefetch of the months either side start and settle.
+  let n = -1;
+  while (n !== calls.length) { n = calls.length; await sleep(700); }
+  const view = (v) => `document.getElementById('stage').dataset.view === '${v}' && !document.body.classList.contains('loading') && document.querySelectorAll('.card').length > 0`;
+  for (const [key, v] of [["m", "month"], ["d", "day"], ["m", "month"], ["w", "week"]]) {
+    await page.key(key);
+    await page.waitFor(view(v), { timeout: 300, interval: 10 });
+  }
+  await page.key("k"); // the week after, still in November's block
+  await sleep(100);
+  assert.equal(calls.length, n, "no new Calendar requests");
+});
+
+test("a reload asks for events at once, without waiting for the calendar list", async () => {
+  const page = await open("desktop");
+  const calls = page.fake.calendarCalls;
+  await sleep(800);
+  calls.length = 0;
+  await page.send("Page.reload", {});
+  await page.waitFor("document.querySelectorAll('.card').length > 3", { timeout: 10000 });
+  const list = calls.find((c) => c.path.endsWith("/calendarList"));
+  const events = calls.filter((c) => c.path.endsWith("/events"));
+  assert.ok(events.length >= 3);
+  assert.ok(events[0].at < list.done, "events were asked for before the list came back");
+  assert.ok(await page.eval(`!!document.querySelector('.card[data-id="lunch"]')`), "the user's own events show");
+});
 
 test("events without a title read as Busy or No title, with a hatched tile instead of a letter", async () => {
   const page = await open("desktop");

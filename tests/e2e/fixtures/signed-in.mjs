@@ -65,7 +65,8 @@ const ev = (id, title, d, from, to, extra = {}) => ({
 
 // worker: { mode } turns on the fake token Worker. mode "ok", "limited" (429, the
 // free plan's daily limit) or "reauth" (no refresh token stored). Every request
-// it gets is pushed to the returned `workerCalls`.
+// it gets is pushed to the returned `workerCalls`. Calendar API requests go to
+// `calendarCalls` as { path, at, done }: when each was asked and answered (ms).
 export function signedIn({ apiDelay = 500, expired = [], signedOut = false, worker = null } = {}) {
   const accounts = [
     { email: "me@example.com", name: "Me", picture: "", owner: true },
@@ -122,6 +123,7 @@ export function signedIn({ apiDelay = 500, expired = [], signedOut = false, work
 
   const js = (body) => ({ body, type: "text/javascript" });
   const workerCalls = [];
+  const calendarCalls = [];
   const config = readFileSync(new URL("../../../js/config.js", import.meta.url), "utf8")
     .replace(/tokenWorkerUrl = ".*?"/, `tokenWorkerUrl = "${worker ? WORKER_URL : ""}"`); // never the real one
   const routes = (url, req) => {
@@ -154,6 +156,8 @@ export function signedIn({ apiDelay = 500, expired = [], signedOut = false, work
     }
     const m = url.match(/googleapis\.com\/calendar\/v3\/(?:users\/me\/calendarList|calendars\/([^/]+)\/events)/);
     if (m) {
+      const call = { path: new URL(url).pathname.replace("/calendar/v3", ""), at: Date.now(), done: Date.now() + apiDelay };
+      if (req.method !== "OPTIONS") calendarCalls.push(call);
       const auth = req.headers.Authorization || req.headers.authorization || "";
       const account = auth.replace("Bearer tok-", "");
       if (!m[1]) return { body: { items: calendars[account] || [] }, delay: apiDelay };
@@ -164,5 +168,5 @@ export function signedIn({ apiDelay = 500, expired = [], signedOut = false, work
     }
     return null;
   };
-  return { routes, setup, calendars, events, profile, workerCalls };
+  return { routes, setup, calendars, events, profile, workerCalls, calendarCalls };
 }
