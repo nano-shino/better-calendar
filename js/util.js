@@ -86,6 +86,12 @@ export function relative(ms) {
   return `in ${d} day${d > 1 ? "s" : ""}`;
 }
 
+// A card's tile letter: the first letter or digit, so "(Draft) plan" gets "D", not "(".
+export function tileLetter(title) {
+  const m = /[\p{L}\p{N}]/u.exec(String(title || ""));
+  return m ? m[0].toLocaleUpperCase() : "•";
+}
+
 export function hash(s) {
   let x = 2166136261;
   for (const c of String(s)) { x ^= c.codePointAt(0); x = Math.imul(x, 16777619); }

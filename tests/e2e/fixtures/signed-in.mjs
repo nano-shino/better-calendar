@@ -73,8 +73,14 @@ export function signedIn({ apiDelay = 500, expired = [], signedOut = false, work
   ];
   const calendars = {
     "me@example.com": [{ id: "me@example.com", summary: "Personal", backgroundColor: "#4c8bf5", primary: true }],
-    "work@example.com": [{ id: "work@example.com", summary: "Work", backgroundColor: "#e67c73", primary: true }],
+    "work@example.com": [
+      { id: "work@example.com", summary: "Work", backgroundColor: "#e67c73", primary: true, accessRole: "owner" },
+      // Shared with us as free/busy only: Google sends times and nothing else.
+      { id: "partner@group.calendar.google.com", summary: "Partner", backgroundColor: "#9e69af", accessRole: "freeBusyReader" },
+    ],
   };
+  const busy = (id, d, from, to) => ({ id, status: "confirmed", start: { dateTime: at(d, from) }, end: { dateTime: at(d, to) } });
+  const untitled = (id, d, from, to) => { const e = ev(id, "", d, from, to); delete e.summary; return e; };
   const events = {
     "me@example.com": [
       ev("gym16", "Gym", 16, "07:00", "08:00", { recurringEventId: "gym" }),
@@ -83,6 +89,11 @@ export function signedIn({ apiDelay = 500, expired = [], signedOut = false, work
       ev("picked", "Piano lesson", 17, "17:00", "18:00"),
       ev("errand", "Pick up parcel", 19, "09:00", "09:30"),
       ev("dinner", "Dinner with friends", 20, "19:00", "21:00"),
+      untitled("blank", 18, "16:00", "16:30"),
+    ],
+    "partner@group.calendar.google.com": [
+      busy("busy17", 17, "10:00", "11:00"),
+      busy("busy19", 19, "15:00", "16:30"),
     ],
     "work@example.com": [
       ev("standup16", "Team standup", 16, "09:30", "09:45", { recurringEventId: "standup" }),

@@ -4,6 +4,16 @@ import assert from "node:assert/strict";
 const util = await import("../../js/util.js");
 const { sampleEvents } = await import("../../js/sample.js");
 
+test("tile letter: the first letter or digit, never punctuation", () => {
+  assert.equal(util.tileLetter("Gym"), "G");
+  assert.equal(util.tileLetter("(Draft) plan"), "D");
+  assert.equal(util.tileLetter("  [ext] market"), "E");
+  assert.equal(util.tileLetter("élan"), "É");
+  assert.equal(util.tileLetter("1:1 with Sam"), "1");
+  assert.equal(util.tileLetter("🎉 !!"), "•");
+  assert.equal(util.tileLetter(""), "•");
+});
+
 test("dates: adding days and months, same-day checks", () => {
   const d = new Date(2026, 0, 31);
   assert.equal(util.addMonths(d, 1).getMonth(), 1, "Jan 31 + 1 month lands in February");

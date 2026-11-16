@@ -580,6 +580,14 @@ a.link-btn { text-decoration: none; }
   font-size: 18px; font-weight: 600; color: color-mix(in oklab, var(--c) 75%, var(--ink));
   background: color-mix(in oklab, var(--c) 14%, var(--paper));
 }
+/* Untitled or busy-only: nothing to show but that the time is taken, so hatch it */
+.c-tile-blank {
+  background: repeating-linear-gradient(135deg,
+    color-mix(in oklab, var(--c) 22%, var(--paper)) 0 4px,
+    color-mix(in oklab, var(--c) 8%, var(--paper)) 4px 9px);
+}
+.c-title-untitled, .pv-title-untitled { color: var(--ink-2); }
+.pv-hidden-note { margin: 0; font-size: 13.5px; color: var(--ink-2); }
 /* Free-day rows use the same date column as day groups */
 .free-run { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 0 24px; align-items: baseline; }
 .fr-days { min-width: 0; white-space: nowrap; }

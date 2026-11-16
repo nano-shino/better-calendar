@@ -49,6 +49,29 @@ for (const viewport of ["desktop", "phone"]) {
   });
 }
 
+test("events without a title read as Busy or No title, with a hatched tile instead of a letter", async () => {
+  const page = await open("desktop");
+  const cardOf = (id) => page.eval(`(() => { const c = document.querySelector('.card[data-id="${id}"]');
+    const t = c.querySelector('.c-tile'); return { title: c.querySelector('.c-title').textContent, blank: !!t?.classList.contains('c-tile-blank'), letter: t?.textContent ?? null, photo: !!c.querySelector('.ph, .c-thumb') }; })()`);
+  assert.deepEqual(await cardOf("busy17"), { title: "Busy", blank: true, letter: "", photo: false });
+  assert.deepEqual(await cardOf("blank"), { title: "No title", blank: true, letter: "", photo: false });
+  assert.equal((await cardOf("plan")).letter, "Q");
+
+  await page.click('.card[data-id="busy17"]');
+  await page.waitFor("document.getElementById('pvTitle')?.textContent === 'Busy'");
+  assert.match(await page.eval("document.querySelector('.pv-hidden-note').textContent"), /^Partner shares only when it's busy/);
+  assert.equal(await page.eval("!!document.querySelector('.panel .scope, .panel .pk-grid')"), false, "no photo picker for a busy block");
+});
+
+test("an untitled event of your own keeps the photo picker, without the keyword option", async () => {
+  const page = await open("desktop");
+  await page.click('.card[data-id="blank"]');
+  await page.waitFor("document.getElementById('pvTitle')?.textContent === 'No title'");
+  assert.equal(await page.eval("!!document.getElementById('scope-event')"), true);
+  assert.equal(await page.eval("!!document.getElementById('scope-keyword')"), false);
+  assert.equal(await page.eval("document.getElementById('pkQuery').value"), "", "no search for the words 'No title'");
+});
+
 test("picking a photo for one event doesn't fade the other photos out and in again", async () => {
   const page = await open("desktop");
   await page.eval(`(() => { window.__hidden = 0; const tick = () => {

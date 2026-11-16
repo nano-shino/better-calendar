@@ -229,6 +229,7 @@ export async function listCalendars(email) {
     color: c.backgroundColor || "#5b7cfa",
     primary: !!c.primary,
     selectedInGoogle: c.selected !== false,
+    freeBusyOnly: c.accessRole === "freeBusyReader",
   })).sort((a, b) => (b.primary - a.primary) || a.name.localeCompare(b.name));
 }
 
@@ -258,11 +259,18 @@ function normalize(e, cal) {
   const allDay = !!e.start?.date;
   const start = allDay ? parseLocalDate(e.start.date) : new Date(e.start.dateTime);
   const end = allDay ? parseLocalDate(e.end.date) : new Date(e.end.dateTime);
+  // No summary means one of two things. Either Google hid the details (a calendar
+  // shared as free/busy only, or a private event on someone else's calendar), so all
+  // we know is that the time is taken, or the owner left the title empty.
+  const title = (e.summary || "").trim();
+  const busy = !title && (cal.freeBusyOnly || e.visibility === "private" || e.visibility === "confidential");
   return {
     id: e.id,
     uid: e.iCalUID || e.id,
     seriesId: e.recurringEventId || null,
-    title: e.summary || "(No title)",
+    title: title || (busy ? "Busy" : "No title"),
+    untitled: !title,
+    busy,
     description: e.description || "",
     location: e.location || "",
     start, end, allDay,

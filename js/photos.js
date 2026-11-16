@@ -44,7 +44,9 @@ const THEMES = [
 ];
 
 // The kind of event a title clearly names, or null.
+// An untitled event's title is our own placeholder ("Busy", "No title"), so it names nothing.
 export function themeFor(ev) {
+  if (ev.untitled) return null;
   const title = String(ev.title || "");
   const lower = title.toLowerCase();
   return THEMES.find((t) => t.re.test(title)) || null;
@@ -66,7 +68,7 @@ function placeName(location) {
 export function autoQuery(ev) {
   const theme = themeFor(ev);
   if (theme) return theme.q;
-  const w = wordsOf(ev.title).slice(0, 3);
+  const w = ev.untitled ? [] : wordsOf(ev.title).slice(0, 3);
   if (w.length) return w.join(" ");
   return placeName(ev.location);
 }
@@ -125,6 +127,7 @@ export function ruleFor(ev) {
   const { rules } = getProfile();
   if (rules.event[ev.id]) return { pick: rules.event[ev.id], scope: "event" };
   if (ev.seriesId && rules.series[ev.seriesId]) return { pick: rules.series[ev.seriesId], scope: "series" };
+  if (ev.untitled) return null;
   const t = ev.title.toLowerCase();
   const kw = rules.keywords.find((k) => k.word && t.includes(k.word.toLowerCase()));
   if (kw) return { pick: kw.pick, scope: "keyword", word: kw.word };

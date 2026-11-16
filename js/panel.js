@@ -165,8 +165,9 @@ function build(ev, keepScroll, message = "") {
   const details = h("div", { class: "pv-details" },
     h("p", { class: "pv-cal" }, h("span", { class: "dot", vars: { "--c": ev.color } }),
       h("span", { text: ev.calName }), ev.account !== "sample" ? h("span", { class: "pv-acct", text: ev.account }) : null),
-    h("h2", { class: "pv-title", id: "pvTitle", text: ev.title }),
+    h("h2", { class: `pv-title${ev.untitled ? " pv-title-untitled" : ""}`, id: "pvTitle", text: ev.title }),
     h("p", { class: "pv-when" }, h("span", { text: line1 }), h("span", { class: "sub", text: line2 })),
+    ev.busy ? h("p", { class: "pv-hidden-note", text: `${ev.calName} shares only when it's busy, not what the event is.` }) : null,
     ev.location ? h("p", { class: "pv-row" }, icon("pin"),
       h("a", { href: `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ev.location)}`, target: "_blank", rel: "noopener", text: ev.location })) : null,
     ev.meet ? h("p", { class: "pv-row" }, icon("video"), h("a", { href: ev.meet, target: "_blank", rel: "noopener", text: "Join video call" })) : null,
@@ -175,7 +176,8 @@ function build(ev, keepScroll, message = "") {
     googleLinks(ev),
   );
 
-  const picker = buildPicker(ev, rule, photo, credit, message);
+  // A busy block is someone else's hidden event: nothing to choose a photo for.
+  const picker = ev.busy ? null : buildPicker(ev, rule, photo, credit, message);
   const scroll = h("div", { class: "pv-scroll" }, photo, details, picker);
   panel.replaceChildren(scroll);
   panel.setAttribute("aria-labelledby", "pvTitle");
@@ -193,6 +195,7 @@ function googleLinks(ev) {
   const user = ev.account && ev.account.includes("@") ? `authuser=${encodeURIComponent(ev.account)}` : "";
   const edit = `https://calendar.google.com/calendar/r/eventedit/${encodeURIComponent(eid)}${user ? `?${user}` : ""}`;
   const view = `https://calendar.google.com/calendar/event?eid=${encodeURIComponent(eid)}${user ? `&${user}` : ""}`;
+  if (ev.busy) return h("div", { class: "pv-links" }, h("a", { class: "btn small", href: view, target: "_blank", rel: "noopener", text: "Open in Google Calendar" }));
   return h("div", { class: "pv-links" },
     h("a", { class: "btn small", href: edit, target: "_blank", rel: "noopener", text: "Edit in Google Calendar" }),
     h("a", { class: "link-btn", href: view, target: "_blank", rel: "noopener", text: "View" }));
@@ -212,7 +215,7 @@ function setCredit(el, p) {
 }
 
 function buildPicker(ev, rule, photo, credit, message = "") {
-  const word0 = rule?.word || wordsOf(ev.title)[0] || ev.title.toLowerCase();
+  const word0 = ev.untitled ? "" : rule?.word || wordsOf(ev.title)[0] || ev.title.toLowerCase();
   const initial = rule?.scope || (ev.seriesId ? "series" : "event");
   const keyword = h("input", { class: "kw-input", id: "kwInput", type: "text", value: word0, "aria-label": "Keyword", autocomplete: "off", spellcheck: "false" });
   const scopeOpt = (value, label, extra) => h("label", { class: "sc-opt" },
@@ -222,7 +225,7 @@ function buildPicker(ev, rule, photo, credit, message = "") {
     h("legend", { text: "Use the photo for" }),
     scopeOpt("event", "This event"),
     ev.seriesId ? scopeOpt("series", "Every repeat") : null,
-    scopeOpt("keyword", "Titles with ", keyword));
+    ev.untitled ? null : scopeOpt("keyword", "Titles with ", keyword));
   keyword.addEventListener("focus", () => { $("#scope-keyword", scope).checked = true; });
 
   const getScope = () => $('input[name="scope"]:checked', scope)?.value || "event";

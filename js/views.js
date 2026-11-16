@@ -1,6 +1,6 @@
 // Day, Week and Month as lists: one event after another, grouped by day.
 // Events with a photo get a large photo card; the rest get a compact plain card.
-import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration } from "./util.js";
+import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration, tileLetter } from "./util.js";
 import { photoFor, cachedPhoto, expectsPhoto } from "./photos.js";
 
 const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComponent(c))}")`;
@@ -152,7 +152,9 @@ function card(ev, now, ctx, lead) {
   const live = !ev.allDay && ev.start <= now && ev.end > now;
   const past = ev.end <= now;
   const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
-  const tile = !big && !thumb ? h("span", { class: "c-tile", "aria-hidden": "true", text: (ev.title.trim()[0] || "•").toUpperCase() }) : null;
+  const tile = !big && !thumb ? (ev.untitled
+    ? h("span", { class: "c-tile c-tile-blank", "aria-hidden": "true" })
+    : h("span", { class: "c-tile", "aria-hidden": "true", text: tileLetter(ev.title) })) : null;
   const el = h("button", {
     class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}`,
     type: "button",
@@ -169,7 +171,7 @@ function card(ev, now, ctx, lead) {
       live ? h("span", { class: "c-live", text: "Now" }) : null,
       h("span", { text: whenLabel(ev) }),
       !ev.allDay && !live ? h("span", { class: "c-dur", text: duration(ev.end - ev.start) }) : null),
-    h("span", { class: "c-title", text: ev.title }),
+    h("span", { class: `c-title${ev.untitled ? " c-title-untitled" : ""}`, text: ev.title }),
     ev.location ? h("span", { class: "c-loc", text: ev.location.split("\n")[0] }) : null),
   h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
   if (big) paintPhoto(el, ev);
