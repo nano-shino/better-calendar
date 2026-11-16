@@ -14,7 +14,8 @@ export const MAX_DEPTH = 2;
 //   tucked:    lies over the card before it
 //   under:     the next card is tucked over this one
 //   at:        how far into the card before it this one starts, 0 to 1 (0 when not tucked)
-//   depth:     0 for a card on the list, 1 for one tucked over it, and so on
+//   depth:     how far it shifts right: 0 on the list and for a later start,
+//              one more than the card before it for a shared start
 //   sameStart: starts when the card before it starts
 export function overlapUnits(list, day) {
   const from = +day, to = +nextDay(day);
@@ -31,8 +32,9 @@ export function overlapUnits(list, day) {
     if (overlaps) {
       const p = prev.ev;
       unit.at = Math.min(1, (start(ev) - start(p)) / Math.max(1, end(p) - start(p)));
-      unit.depth = Math.min(MAX_DEPTH, prev.depth + 1);
       unit.sameStart = start(ev) === start(p);
+      // Only cards that start together shift right; a later start already shows the card below's top.
+      unit.depth = unit.sameStart ? Math.min(MAX_DEPTH, prev.depth + 1) : 0;
     }
     units.push(unit);
     if (ev.allDay) { prev = null; runEnd = -Infinity; continue; }

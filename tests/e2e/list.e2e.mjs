@@ -206,7 +206,7 @@ test("an event that starts during another lies on it, as far down as its start i
   const h = plan.bottom - plan.top;
   const want = Math.min(Math.round(0.75 * h), h - 22);
   assert.ok(Math.abs(call.top - plan.top - want) <= 1, `${want} px down, got ${call.top - plan.top}`);
-  assert.ok(Math.abs(call.left - plan.left - 48) <= 1, "shifted right one level, so the tile below shows");
+  assert.ok(Math.abs(call.left - plan.left) <= 1, "a later start lines up left, not shifted right");
   assert.match(await page.eval(`${cardOf("Call with Jo")}.getAttribute('aria-label')`), /overlaps Quarterly planning/);
 });
 

@@ -35,10 +35,12 @@ test("a tucked card knows how far into the card below it starts, and how deep it
   const facts = units.map((u) => [u.ev.id, +u.at.toFixed(3), u.depth, u.sameStart]);
   assert.deepEqual(facts, [
     ["review", 0, 0, false],
-    ["interview", 0, 1, true], // same start: same height
-    ["call", 0.444, 2, false], // 20 of the interview's 45 minutes in
-    ["text", 0.25, 2, false], // no deeper than two
+    ["interview", 0, 1, true], // same start: same height, shifted right
+    ["call", 0.444, 0, false], // 20 of the interview's 45 minutes in, lined up left
+    ["text", 0.25, 0, false],
   ]);
+  const same = overlapUnits(sorted([ev("a", 9, 0, 12, 0), ev("b", 9, 0, 11, 0), ev("c", 9, 0, 10, 0), ev("d", 9, 0, 9, 30)]), day);
+  assert.deepEqual(same.map((u) => u.depth), [0, 1, 2, 2], "no deeper than two");
   const half = overlapUnits(sorted([ev("hike", 8, 0, 14, 0), ev("picnic", 11, 0, 12, 0)]), day);
   assert.equal(half[1].at, 0.5);
 });

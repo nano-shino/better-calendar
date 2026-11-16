@@ -762,7 +762,8 @@ a.link-btn { text-decoration: none; }
 /* Overlap in time is drawn as overlap on screen (see js/overlaps.js). A card that
    starts during the one above lies on it, as far down as its start is into that event
    (stackRuns in views.js sets --dk-pull), so events that start together start at the
-   same height. Each level shifts right so the card below still shows its tile. A tap
+   same height. Cards that start together shift right so the card below still shows its
+   tile; a later start lines up left, since the card below shows above it. A tap
    on a stacked card spreads its run apart (.dk-open); the time column stacks it again. */
 .agenda { --dk-shift: 48px; }
 .cards > li.dk-tuck { z-index: 1; margin-top: var(--dk-pull, -32px); }
