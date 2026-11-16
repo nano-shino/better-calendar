@@ -92,6 +92,70 @@ test("Noon and Evening markers sit before the first event of each part of the da
   assert.equal(await page.eval("document.querySelector('.day.today .pm-noon').getAttribute('aria-label')"), "Noon, from 12:00 PM");
 });
 
+const slotOf = (title, day = "Mon Nov 16 2026") => `[...document.querySelectorAll('[data-day="${day}"] .slot')].find((li) => li.querySelector('.c-title').textContent === ${JSON.stringify(title)})`;
+
+test("each event sits beside a time column: big start, AM/PM, end, in its hour's sky", async () => {
+  const coffee = await page.eval(`(() => { const li = ${slotOf("Coffee with Alex")};
+    return { time: li.querySelector('.ck-time').textContent, ap: li.querySelector('.ck-ap').textContent,
+      end: li.querySelector('.ck-end').textContent, cls: li.className, sub: li.querySelector('.c-loc').textContent,
+      when: !!li.querySelector('.c-when'), size: parseFloat(getComputedStyle(li.querySelector('.ck-time')).fontSize),
+      clockRight: li.querySelector('.c-clock').getBoundingClientRect().right, cardLeft: li.querySelector('.card').getBoundingClientRect().left }; })()`);
+  assert.deepEqual([coffee.time, coffee.ap, coffee.end], ["3:00", "PM", "4:00"]);
+  assert.match(coffee.cls, /sky-afternoon/);
+  assert.equal(coffee.sub, "1 h · Corner Café", "the card says how long, not when");
+  assert.equal(coffee.when, false);
+  assert.ok(coffee.size >= 20, `start time is big, got ${coffee.size}px`);
+  assert.ok(coffee.cardLeft > coffee.clockRight, "the column sits beside the card");
+  assert.match(await page.eval(`${slotOf("Team standup")}.className`), /sky-morning/);
+  assert.match(await page.eval(`${slotOf("Gym")}.className`), /sky-evening/);
+  // Every column in a day lines up, so the eye can run down it.
+  const rights = await page.eval("[...document.querySelectorAll('.day.today .c-clock')].map((c) => Math.round(c.getBoundingClientRect().right))");
+  assert.equal(new Set(rights).size, 1);
+});
+
+test("the duration bar grows with the event's length", async () => {
+  const bar = (t) => page.eval(`${slotOf(t, "Tue Nov 17 2026")}.querySelector('.ck-bar').getBoundingClientRect().height`);
+  const standup = await bar("Team standup"), planning = await bar("Quarterly planning");
+  assert.ok(planning > standup * 2, `2 h bar (${planning}) is much longer than 15 min (${standup})`);
+});
+
+test("the sky strip is grey up to Now and on past days, colored after", async () => {
+  const strip = await page.eval(`[...document.querySelectorAll('.day.today .cards > li[data-sky]')].map((li) =>
+    [li.classList.contains('now-mark') ? 'NOW' : li.querySelector('.c-title, .pm-label').textContent, li.style.getPropertyValue('--st-a'), li.style.getPropertyValue('--st-b')])`);
+  assert.deepEqual(strip, [
+    ["Team standup", "var(--strip-past)", "var(--strip-past)"],
+    ["NOW", "var(--strip-past)", "var(--strip-afternoon)"],
+    ["Noon", "var(--strip-afternoon)", "var(--strip-afternoon)"],
+    ["Coffee with Alex", "var(--strip-afternoon)", "var(--strip-evening)"],
+    ["Evening", "var(--strip-evening)", "var(--strip-evening)"],
+    ["Gym", "var(--strip-evening)", "var(--strip-evening)"],
+  ]);
+  const yesterday = await page.eval(`[...document.querySelectorAll('[data-day="Sun Nov 15 2026"] .cards > li[data-sky]')].map((li) => li.style.getPropertyValue('--st-a'))`);
+  assert.ok(yesterday.length && yesterday.every((v) => v === "var(--strip-past)"));
+  // The sun sits on the strip at the Now line.
+  const sun = await page.eval(`(() => { const s = document.querySelector('.day.today .nm-sun').getBoundingClientRect(), b = ${slotOf("Coffee with Alex")}.querySelector('.ck-bar').getBoundingClientRect();
+    return Math.abs((s.left + s.right) / 2 - (b.left + b.right) / 2); })()`);
+  assert.ok(sun < 1.5, `sun is centered on the bar line, off by ${sun}`);
+});
+
+test("only today's header has the sun arc, placed by the time of day", async () => {
+  assert.equal(await page.eval("document.querySelectorAll('.dh-sun').length"), 1);
+  assert.equal(await page.eval("!!document.querySelector('.day.today .day-h .dh-sun')"), true);
+  // 10:00 is 4 h into the 6 AM to 9 PM arc.
+  assert.equal(await page.eval("document.querySelector('.dh-sun').dataset.progress"), "0.267");
+});
+
+test("past events are grey until hovered", async () => {
+  const past = await page.eval(`(() => { const li = ${slotOf("Team standup")};
+    return { card: getComputedStyle(li.querySelector('.card')).filter, clock: getComputedStyle(li.querySelector('.c-clock')).filter }; })()`);
+  assert.match(past.card, /grayscale\(1\)/);
+  assert.match(past.clock, /grayscale\(1\)/);
+  assert.equal(await page.eval(`getComputedStyle(${slotOf("Coffee with Alex")}.querySelector('.card')).filter`), "none");
+  const id = await page.eval(`${slotOf("Team standup")}.querySelector('.card').dataset.id`);
+  await page.hover(`.day.today .card[data-id="${id}"]`);
+  await page.waitFor(`getComputedStyle(document.querySelector('.day.today .card[data-id="${id}"]')).filter === 'none'`);
+});
+
 test("a multi-day all-day event appears once, on its first day in range", async () => {
   const trips = await page.eval("[...document.querySelectorAll('.card')].filter((c) => c.textContent.includes('Trip to Portugal')).map((c) => c.closest('.day').dataset.day)");
   assert.deepEqual(trips, ["Fri Nov 20 2026"]);

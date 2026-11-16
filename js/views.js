@@ -102,6 +102,7 @@ export function renderList(days, events, ctx, mode) {
         h("span", { class: "dh-dow", text: isToday ? "Today" : fmt.dow.format(day) }),
         h("span", { class: "dh-num", text: day.getDate() }),
         h("span", { class: "dh-mon", text: fmt.monthShort.format(day) }));
+    if (isToday) head.append(sunArc(now));
     if (mode !== "day" && ctx.openDay) {
       head.classList.add("link");
       head.setAttribute("role", "button");
@@ -129,10 +130,14 @@ export function renderList(days, events, ctx, mode) {
         nowPlaced = true;
       }
       if (mark) ol.append(mark);
-      ol.append(h("li", {}, card(ev, now, ctx, isLead(ev))));
+      const from = ev.allDay ? day : ev.start < day ? day : ev.start;
+      ol.append(h("li", { class: `slot sky-${ev.allDay ? "allday" : skyOf(from)}${ev.end <= now ? " past" : ""}`,
+        dataset: { sky: ev.allDay ? "dawn" : skyOf(from) } },
+        clock(ev, day), card(ev, now, ctx, isLead(ev))));
     }
     if (!nowPlaced && list.some((e) => !e.allDay)) ol.append(nowMark(now));
     if (!list.length) ol.append(h("li", { class: "day-empty", text: "Nothing planned today" }));
+    paintStrip(ol, day < today);
     group.append(head, ol);
     root.append(group);
   }
@@ -166,15 +171,34 @@ const partOf = (d) => { const hr = d.getHours(); return hr >= 17 ? 2 : hr >= 12 
 
 function partMark(day, p, now) {
   const at = new Date(day); at.setHours(p.hour, 0, 0, 0);
-  return h("li", { class: `part-mark pm-${p.key}${at <= now ? " past" : ""}`, "aria-label": `${p.label}, from ${fmt.time.format(at)}` },
+  return h("li", { class: `part-mark pm-${p.key}${at <= now ? " past" : ""}`, dataset: { sky: skyOf(at) }, "aria-label": `${p.label}, from ${fmt.time.format(at)}` },
     h("span", { class: "pm-badge", "aria-hidden": "true" }, svg(p.icon)),
     h("span", { class: "pm-label", "aria-hidden": "true", text: p.label }),
     h("span", { class: "pm-time", "aria-hidden": "true", text: fmt.hour.format(at) }));
 }
 
 function nowMark(now) {
-  return h("li", { class: "now-mark", "aria-label": `Now, ${fmt.time.format(now)}` },
-    h("span", { class: "nm-pill", text: "Now" }), h("span", { class: "nm-time", text: fmt.time.format(now) }));
+  return h("li", { class: "now-mark", dataset: { sky: skyOf(now) }, "aria-label": `Now, ${fmt.time.format(now)}` },
+    h("span", { class: "nm-pill", text: "Now" }), h("span", { class: "nm-time", text: fmt.time.format(now) }),
+    h("span", { class: `nm-sun${skyOf(now) === "night" ? " night" : ""}`, "aria-hidden": "true" }));
+}
+
+// The sky strip: a muted track behind the duration bars. Each row paints its own
+// piece, fading from its sky into the next row's, so it runs from dawn to night
+// without gaps. Time already gone is grey: every row of a past day, and today's rows
+// up to the Now line (or ones that have ended, when a live event stands in for it).
+function paintStrip(ol, dayPast) {
+  const rows = [...ol.children].filter((li) => li.dataset.sky);
+  const nowAt = rows.findIndex((li) => li.classList.contains("now-mark"));
+  const gone = (li, i) => dayPast || (nowAt >= 0 ? i < nowAt : li.classList.contains("past"));
+  const tone = (li, i) => (gone(li, i) ? "past" : li.dataset.sky);
+  rows.forEach((li, i) => {
+    const next = rows[i + 1];
+    li.style.setProperty("--st-a", `var(--strip-${i === nowAt ? "past" : tone(li, i)})`);
+    li.style.setProperty("--st-b", `var(--strip-${next && !gone(li, i) ? tone(next, i + 1) : tone(li, i)})`);
+    if (i === 0) li.classList.add("st-first");
+    if (i === rows.length - 1) li.classList.add("st-last");
+  });
 }
 
 // The free time between now and today's next event: a dotted thread from the Now
@@ -196,6 +220,54 @@ function nowGap(now, next) {
     h("span", { class: "ng-until", text: `until ${next.title}` })));
 }
 
+// The sky at an hour, which tints the time column: AM/PM, the duration bar, Noon and Evening.
+const SKY = [[6, "night"], [9, "dawn"], [12, "morning"], [17, "afternoon"], [21, "evening"], [24, "night"]];
+export const skyOf = (d) => SKY.find(([end]) => d.getHours() < end)[1];
+
+// "3:00" and "PM" apart, so the digits can be big and the period small.
+function clockParts(d) {
+  const parts = fmt.time.formatToParts(d);
+  const period = parts.find((p) => p.type === "dayPeriod")?.value || "";
+  return { main: parts.filter((p) => p.type !== "dayPeriod").map((p) => p.value).join("").trim(), period };
+}
+
+// The time column beside each card: a big start time, its AM/PM, the end time, and
+// a bar in the sky's color that grows with the event's length (0.4 px a minute).
+// The card's aria-label already reads the time, so this is for the eye only.
+function clock(ev, day) {
+  if (ev.allDay) return h("span", { class: "c-clock", "aria-hidden": "true" }, h("span", { class: "ck-word", text: "All day" }));
+  const next = addDays(day, 1);
+  const cont = ev.start < day;
+  const s = clockParts(cont ? ev.end : ev.start), e = clockParts(ev.end);
+  const mins = (Math.min(+ev.end, +next) - Math.max(+ev.start, +day)) / 60000;
+  const showEnd = !cont && ev.end > ev.start && ev.end <= next;
+  return h("span", { class: "c-clock", "aria-hidden": "true", vars: { "--dur": Math.max(0, Math.round(mins)) } },
+    cont ? h("span", { class: "ck-word", text: "until" }) : null,
+    h("span", { class: "ck-time", text: s.main }),
+    s.period ? h("span", { class: "ck-ap", text: s.period }) : null,
+    showEnd ? h("span", { class: "ck-end", text: e.period && e.period !== s.period ? `${e.main} ${e.period}` : e.main }) : null,
+    h("i", { class: "ck-bar" }));
+}
+
+// Today's header: a sun on an arc from 6 AM to 9 PM, so a glance says how much of the
+// day is left. A fixed span (no sunrise data needed); outside it, a moon at either end.
+function sunArc(now) {
+  const t = (now.getHours() * 60 + now.getMinutes() - 360) / (15 * 60);
+  const k = Math.min(1, Math.max(0, t));
+  const x = (32 - 26 * Math.cos(Math.PI * k)).toFixed(1), y = (30 - 26 * Math.sin(Math.PI * k)).toFixed(1);
+  const done = k > 0 ? `<path class="sa-done" d="M6 30A26 26 0 0 1 ${x} ${y}"/>` : "";
+  const body = t < 0 || t > 1
+    ? `<path class="sa-moon" transform="translate(${x - 5} ${y - 5})" d="M8.5 6.6A4 4 0 0 1 3.4 1.5a4 4 0 1 0 5.1 5.1Z"/>`
+    : `<circle class="sa-halo" cx="${x}" cy="${y}" r="7"/><circle class="sa-sun" cx="${x}" cy="${y}" r="4"/>`;
+  const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  el.setAttribute("viewBox", "0 0 64 34");
+  el.setAttribute("aria-hidden", "true");
+  el.setAttribute("class", `dh-sun${t < 0 || t > 1 ? " night" : ""}`);
+  el.dataset.progress = k.toFixed(3);
+  el.innerHTML = `<path class="sa-track" d="M6 30A26 26 0 0 1 58 30"/><path class="sa-ground" d="M2 30H62"/>${done}${body}`;
+  return el;
+}
+
 function whenLabel(ev) {
   if (ev.allDay) {
     const days = Math.round((ev.end - ev.start) / 86400000);
@@ -211,6 +283,8 @@ function card(ev, now, ctx, lead) {
   const big = hasPhoto && lead;
   const live = !ev.allDay && ev.start <= now && ev.end > now;
   const past = ev.end <= now;
+  const multi = ev.allDay ? ev.end - ev.start > 86400000 * 1.5 : !sameDay(ev.start, new Date(ev.end - 1));
+  const sub = [!ev.allDay && !live && !multi && ev.end > ev.start ? duration(ev.end - ev.start) : null, ev.location?.split("\n")[0]].filter(Boolean).join(" · ");
   const art = big ? h("span", { class: "c-art" }, h("span", { class: "ph" })) : null;
   const thumb = hasPhoto && !big ? h("span", { class: "c-thumb", vars: { "--c": ev.color } }, h("span", { class: "ph" })) : null;
   const tile = !big && !thumb ? (ev.untitled
@@ -229,12 +303,12 @@ function card(ev, now, ctx, lead) {
   thumb,
   tile,
   h("span", { class: "c-body" },
-    h("span", { class: "c-when" },
+    // The time column says when; the card only adds what it can't: "Now" or a span of days.
+    live || multi ? h("span", { class: "c-when" },
       live ? h("span", { class: "c-live", text: "Now" }) : null,
-      h("span", { text: whenLabel(ev) }),
-      !ev.allDay && !live ? h("span", { class: "c-dur", text: duration(ev.end - ev.start) }) : null),
+      h("span", { text: live ? `${duration(ev.end - now)} left` : whenLabel(ev) })) : null,
     h("span", { class: `c-title${ev.untitled ? " c-title-untitled" : ""}`, text: ev.title }),
-    ev.location ? h("span", { class: "c-loc", text: ev.location.split("\n")[0] }) : null),
+    sub ? h("span", { class: "c-loc", text: sub }) : null),
   h("span", { class: "c-cal" }, h("span", { class: "dot" }), h("span", { class: "c-cal-name", text: ev.calName })));
   if (big) paintPhoto(art, ev);
   else if (thumb) paintPhoto(thumb, ev);

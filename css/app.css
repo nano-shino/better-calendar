@@ -651,6 +651,119 @@ a.link-btn { text-decoration: none; }
   @keyframes sheet-out { to { transform: translateY(100%); } }
 }
 
+/* ---------- time column and sky tints ---------- */
+/* Every event sits beside a column of big start times, like a printed timetable. The
+   sky at the event's hour tints its AM/PM and a bar that grows with its length; Noon,
+   Evening and the Now thread share the column, so the eye can run straight down it. */
+.agenda { --clock-w: 64px; }
+.mode-day { --clock-w: 78px; }
+.mode-month { --clock-w: 58px; }
+.slot {
+  --sky: var(--ink-3); --sky-ink: var(--ink-2); --sky-tint: var(--wash);
+  display: grid; grid-template-columns: var(--clock-w) minmax(0, 1fr); gap: 0 10px;
+}
+.sky-night, .part-mark.pm-night { --sky: #6b6fc0; --sky-ink: #3f4391; --sky-tint: #e8e9f8; }
+.sky-dawn { --sky: #f2a35b; --sky-ink: #9a520f; --sky-tint: #fdeedd; }
+.sky-morning { --sky: #eebc3a; --sky-ink: #805b00; --sky-tint: #fcf1cf; }
+.sky-afternoon, .part-mark.pm-noon { --sky: #5aa5e6; --sky-ink: #1d5d99; --sky-tint: #e3f0fc; }
+.sky-evening, .part-mark.pm-evening { --sky: #ec7d68; --sky-ink: #a33f2b; --sky-tint: #fde6e0; }
+
+.c-clock { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 10px 10px 9px 0; min-width: 0; text-align: right; }
+.ck-time { font: 650 21px/1 var(--font); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+.ck-ap { font: 650 9.5px/1 var(--font); letter-spacing: 0.06em; color: var(--sky-ink); background: var(--sky-tint); padding: 3px 5px 2px; border-radius: 999px; }
+.ck-end { font: 500 12px/1 var(--font); color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: auto; padding-top: 4px; }
+.ck-word { font: 600 12.5px/1.15 var(--font); color: var(--ink-2); }
+.ck-bar {
+  position: absolute; right: -1px; top: 10px; width: 5px; border-radius: 3px; background: var(--sky);
+  height: min(calc(10px + var(--dur, 0) * 0.4px), calc(100% - 16px));
+}
+/* Past events go grey and quiet: card, photo, tile and time column alike. Hover or
+   focus brings the card's color back, so an old photo can still be looked at. */
+.slot.past .c-clock { opacity: 0.45; filter: grayscale(1); }
+.slot.past > .card.photo { filter: grayscale(1) brightness(0.92); opacity: 0.7; }
+.slot.past > .card.plain { filter: grayscale(1); opacity: 0.5; }
+.slot.past > .card:hover, .slot.past > .card:focus-visible { filter: none; opacity: 1; }
+.slot.past .ck-bar { background: var(--hair-2); }
+.slot:has(> .card.live) .ck-time { color: var(--now); }
+.slot:has(> .card.live) .ck-bar { background: var(--now); }
+.mode-day .ck-time { font-size: 26px; }
+/* the time column takes width from the card, so the Day photo gives way before the title does */
+@media (min-width: 721px) { .mode-day .card.photo { --art-w: min(420px, 52%); } }
+.mode-day .ck-end { font-size: 13px; }
+.mode-month .ck-time { font-size: 18px; }
+
+.c-when { font: 500 13px/1.3 var(--font); letter-spacing: -0.005em; }
+
+/* Now: the pill sits in the time column; the countdown thread runs down the bar line. */
+.now-mark { display: grid; grid-template-columns: var(--clock-w) auto minmax(0, 1fr); gap: 0 10px; align-items: center; font: 600 12.5px/1 var(--font); letter-spacing: -0.01em; }
+.now-mark .nm-pill { justify-self: end; }
+.now-gap { padding-left: calc(var(--clock-w) + 10px); }
+.ng-thread { left: calc(var(--clock-w) - 3px); }
+.now-gap::after { left: calc(var(--clock-w) - 5px); }
+.ng-left { font: 650 15px/1.2 var(--font); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+
+/* Noon and Evening: the hour in the time column, in that part of the day's sky color. */
+.part-mark, .part-mark.pm-noon, .part-mark.pm-evening { --pm: var(--sky-ink); }
+.part-mark { display: grid; grid-template-columns: var(--clock-w) auto auto minmax(0, 1fr); column-gap: 6px; align-items: center; }
+.part-mark .pm-time { grid-row: 1; grid-column: 1; justify-self: end; padding-right: 10px; font: 650 11px/1 var(--font); letter-spacing: 0; color: var(--sky-ink); opacity: 1; }
+.part-mark .pm-badge { grid-row: 1; grid-column: 2; margin-left: 4px; }
+.part-mark .pm-label { grid-row: 1; grid-column: 3; font-weight: 500; color: var(--sky-ink); }
+.part-mark::after { grid-row: 1; grid-column: 4; }
+.day.past .part-mark .pm-time, .day.past .part-mark .pm-label,
+.part-mark.past .pm-time, .part-mark.past .pm-label { color: var(--ink-3); }
+.day.past .part-mark.part-mark, .part-mark.past.past { --pm: var(--ink-3); }
+
+/* The sky strip: a muted track down the time column, on the same line as the duration
+   bars, which sit on it in the stronger sky color. Each row paints its own piece
+   (--st-a to --st-b, set in paintStrip) and reaches across the 10px gap below it, so
+   the track is unbroken; time already gone is grey. The Now countdown's dotted thread
+   takes its place between the Now line and the next event. */
+:root {
+  --strip-night: #d4d6f0; --strip-dawn: #fbe2c8; --strip-morning: #f8eab8;
+  --strip-afternoon: #d5e7f8; --strip-evening: #f9d8cf; --strip-past: #e8eaee;
+}
+.cards > li[data-sky] { position: relative; }
+.cards > li[data-sky]::before {
+  content: ""; position: absolute; left: calc(var(--clock-w) - 3px); top: 0; bottom: -10px; width: 3px;
+  background: linear-gradient(var(--st-a), var(--st-b));
+}
+.cards > li.st-first::before { border-radius: 3px 3px 0 0; }
+.cards > li.st-last::before { bottom: 0; border-radius: 0 0 3px 3px; }
+.cards > li.st-first.st-last::before { border-radius: 3px; }
+.now-mark { position: relative; }
+.now-mark .nm-pill { margin-right: 12px; }
+.now-mark .nm-time { padding-left: 4px; }
+/* the sun sits on the track at the Now line */
+.nm-sun {
+  position: absolute; z-index: 1; top: 50%; left: calc(var(--clock-w) - 1.5px); width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px;
+  border-radius: 50%; background: #ffb81f; box-shadow: 0 0 0 2px var(--paper), 0 0 0 6px rgb(255 200 74 / 0.3);
+}
+.nm-sun.night { background: #c4c6e8; box-shadow: 0 0 0 2px var(--paper), 0 0 0 6px rgb(140 144 210 / 0.25); }
+
+/* Today's sun arc, 6 AM to 9 PM */
+.dh-sun { width: 56px; height: 30px; margin-top: 8px; overflow: visible; }
+.dh-sun path { fill: none; }
+.sa-track { stroke: var(--hair-2); stroke-width: 1.6; stroke-dasharray: 0.1 4; stroke-linecap: round; }
+.sa-ground { stroke: var(--hair-2); stroke-width: 1; }
+.sa-done { stroke: #f2b441; stroke-width: 2; stroke-linecap: round; }
+.sa-halo { fill: #ffc94a; opacity: 0.3; }
+.sa-sun { fill: #ffb81f; }
+.dh-sun .sa-moon { fill: #8a8dd0; }
+.dh-sun.night .sa-done { stroke: #c4c6e8; }
+.mode-day .dh-sun { width: 76px; height: 41px; margin: 0 0 0 auto; align-self: center; }
+
+@media (max-width: 720px) {
+  .agenda { --clock-w: 54px; }
+  .mode-day { --clock-w: 62px; }
+  .slot { gap: 0 8px; }
+  .ck-time, .mode-month .ck-time { font-size: 18px; }
+  .mode-day .ck-time { font-size: 21px; }
+  .c-clock { padding-top: 9px; }
+  .now-gap { padding-left: calc(var(--clock-w) + 8px); }
+  .dh-sun { width: 44px; height: 24px; margin: 0 0 0 auto; align-self: center; }
+  .mode-day .dh-sun { width: 60px; height: 32px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
