@@ -137,8 +137,8 @@ const goToday = () => {
 const setView = (view, anchor = S.target.anchor) => {
   const from = S.target.view;
   if (view === from && sameDay(anchor, S.target.anchor)) return;
-  const order = { day: 0, week: 1, month: 2 };
-  go({ view, anchor, kind: order[view] < order[from] ? "zoom-in" : order[view] > order[from] ? "zoom-out" : "fade" });
+  // Only a fade: the same cards stay put across views, so moving them looks like a jump.
+  go({ view, anchor, kind: "fade" });
 };
 
 // ---------------- rendering ----------------

@@ -29,6 +29,21 @@ test("switches views with the segmented control, keys and the address hash", asy
   assert.equal(await page.eval("document.querySelector('#seg [aria-pressed=true]').dataset.v"), "week");
 });
 
+test("switching between Week and Month only fades: today's cards don't move", async () => {
+  const card = () => page.eval("Math.round(document.querySelector('.day.today .card').getBoundingClientRect().top)");
+  const before = await card();
+  await page.click('#seg [data-v="month"]');
+  await page.waitFor("document.querySelector('#stage').dataset.view === 'month'");
+  // Sample through the animation: the card must never be anywhere else.
+  const tops = [];
+  for (let i = 0; i < 8; i++) { tops.push(await card()); await sleep(30); }
+  assert.deepEqual([...new Set(tops)], [before]);
+  assert.equal(await page.eval("getComputedStyle(document.querySelector('#stage > .agenda')).transform"), "none");
+  await page.click('#seg [data-v="week"]');
+  await page.waitFor("document.querySelector('#stage').dataset.view === 'week'");
+  assert.equal(await card(), before);
+});
+
 test("fast clicks on Next are never lost (no overlay blocks input mid-animation)", async () => {
   const { x, y } = await page.center("#nextBtn");
   for (let i = 0; i < 4; i++) { await page.clickAt(x, y); await sleep(60); }

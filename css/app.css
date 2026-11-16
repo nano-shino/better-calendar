@@ -463,14 +463,11 @@ a.link-btn { text-decoration: none; }
 .stage { overflow-x: hidden; }
 .agenda.enter-next { animation: list-in-right 0.42s var(--ease) both; }
 .agenda.enter-prev { animation: list-in-left 0.42s var(--ease) both; }
-.agenda.enter-zoom-in { animation: list-zoom-in 0.45s var(--ease) both; }
-.agenda.enter-zoom-out { animation: list-zoom-out 0.45s var(--ease) both; }
-.agenda.enter-fade { animation: fade-in 0.35s ease both; }
+/* Day/Week/Month switches only fade: the cards keep their place, so nothing moves. */
+.agenda.enter-fade { animation: fade-in 0.2s ease both; }
 .title.enter { animation: fade-up-in 0.4s var(--ease) both; }
 @keyframes list-in-right { from { opacity: 0; transform: translateX(24px); } }
 @keyframes list-in-left { from { opacity: 0; transform: translateX(-24px); } }
-@keyframes list-zoom-in { from { opacity: 0; transform: scale(0.98); } }
-@keyframes list-zoom-out { from { opacity: 0; transform: scale(1.02); } }
 
 /* Darker neutral base so a photo that is still loading (or morphing) never flashes a bright slab. */
 .card.photo { background: linear-gradient(150deg, color-mix(in oklab, var(--c) 45%, #16181d), #16181d); }
