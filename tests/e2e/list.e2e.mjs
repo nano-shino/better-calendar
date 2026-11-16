@@ -279,4 +279,8 @@ test("consecutive free days collapse into one row", async () => {
   const free = await page.eval("[...document.querySelectorAll('.free-run .fr-days')].map((e) => e.textContent)");
   assert.deepEqual(free, ["17–19 Nov"]);
   assert.equal(await page.eval("document.querySelector('.day.today .day-empty').textContent"), "Nothing planned today");
+  // An empty today keeps its Now line, with the sun (10 AM), and the header's sun arc.
+  assert.deepEqual(await page.eval("[...document.querySelectorAll('.day.today .cards > li')].map((li) => li.className)"), ["now-mark st-first st-last", "day-empty"]);
+  assert.ok(await page.eval("!!document.querySelector('.day.today .now-mark .nm-sun:not(.night) .nm-disc')"));
+  assert.ok(await page.eval("!!document.querySelector('.day.today .day-h .dh-sun')"));
 });

@@ -147,7 +147,8 @@ export function renderList(days, events, ctx, mode) {
       if (stacked) li.addEventListener("click", (e) => { if (li.classList.contains("dk-open") && !e.target.closest(".card")) spreadRun(li, false); });
       ol.append(li);
     }
-    if (!nowPlaced && list.some((e) => !e.allDay)) ol.append(nowMark(now));
+    // Today always shows the Now line, even with nothing timed (or nothing at all) on it.
+    if (!nowPlaced) ol.append(nowMark(now));
     if (!list.length) ol.append(h("li", { class: "day-empty", text: "Nothing planned today" }));
     paintStrip(ol, day < today);
     group.append(head, ol);
