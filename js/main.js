@@ -242,8 +242,10 @@ function renderWelcome() {
   } }, icon("close"));
   card.replaceChildren(...[
     h("div", { class: "wc-text" },
-      h("strong", {}, h("span", { class: "wc-long", text: "Your calendar, with a picture for every plan." }), h("span", { class: "wc-short", text: "A picture for every plan." })),
-      h("span", { text: store.configured ? "These are sample events. Sign in to see yours, from as many Google accounts as you like." : "These are sample events. Add your Firebase settings to js/config.js to connect your calendars (see README)." })),
+      // The app name must be visible here: Google's consent-screen review checks the home page for it.
+      h("strong", {}, h("span", { class: "wc-long", text: "Better Calendar: a picture for every plan." }), h("span", { class: "wc-short", text: "Better Calendar" })),
+      h("span", {}, store.configured ? "These are sample events. Sign in to see yours, from as many Google accounts as you like. " : "These are sample events. Add your Firebase settings to js/config.js to connect your calendars (see README). ",
+        h("a", { class: "wc-link", href: "privacy.html", text: "Privacy" }))),
     store.configured ? h("button", { class: "btn primary", type: "button", onclick: signIn }, googleMark(), "Sign in with Google") : null,
     close,
   ].filter(Boolean));
@@ -388,7 +390,9 @@ function openPop() {
         h("span", { class: "kw-word", text: `“${k.word}”` }),
         h("button", { class: "link-btn", type: "button", text: "Remove", onclick: async () => { await removeKeyword(k.word).catch((e) => toast(e.message)); render(true); openPop(); } })))));
   }
-  if (S.signedIn) kids.push(h("button", { class: "link-btn muted pa-out", type: "button", text: "Sign out", onclick: signOut }));
+  kids.push(h("div", { class: "pa-foot" },
+    S.signedIn ? h("button", { class: "link-btn muted", type: "button", text: "Sign out", onclick: signOut }) : h("span"),
+    h("a", { class: "link-btn muted", href: "privacy.html", text: "Privacy" })));
 
   pop.replaceChildren(...kids);
   pop.hidden = false;

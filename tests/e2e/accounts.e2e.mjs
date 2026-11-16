@@ -69,6 +69,19 @@ test("signing out returns to sample events with the welcome card", async () => {
   assert.match(await page.eval("document.getElementById('welcome').textContent"), /Sign in with Google/);
 });
 
+// Google's consent-screen review checks that the home page shows the app's name
+// and links to the privacy policy.
+test("the welcome card names the app and links to the privacy policy", async () => {
+  const shown = await page.eval("[...document.querySelectorAll('#welcome strong span')].filter((s) => getComputedStyle(s).display !== 'none').map((s) => s.textContent).join('')");
+  assert.match(shown, /Better Calendar/);
+  const href = await page.eval("document.querySelector('#welcome a.wc-link').href");
+  assert.match(href, /\/privacy\.html$/);
+  assert.equal((await fetch(href)).status, 200);
+  await page.click("#acctBtn");
+  assert.equal(await page.eval("[...document.querySelectorAll('.pop a')].some((a) => a.textContent === 'Privacy' && a.href === " + JSON.stringify(href) + ")"), true);
+  await page.key("Escape");
+});
+
 test("the welcome card can be dismissed for the session", async () => {
   await page.click(".wc-x");
   assert.equal((await page.state()).welcomeVisible, false);

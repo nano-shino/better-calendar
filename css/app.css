@@ -376,7 +376,8 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
 .sw-row input:focus-visible + .sw { outline: 2px solid var(--focus); outline-offset: 2px; }
 .kw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; }
 .kw-word { font-weight: 500; overflow-wrap: anywhere; }
-.pa-out { display: block; margin: 4px 10px 8px; }
+.pa-foot { display: flex; justify-content: space-between; align-items: center; margin: 4px 10px 8px; }
+a.link-btn { text-decoration: none; }
 
 /* ---------- welcome + toast ---------- */
 .welcome {
@@ -389,6 +390,8 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 16px); } }
 .wc-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--ink-2); }
 .wc-text strong { color: var(--ink); font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+.wc-link { color: var(--ink-2); text-underline-offset: 3px; text-decoration-color: var(--hair-2); }
+.wc-link:hover { color: var(--ink); text-decoration-color: currentColor; }
 .welcome .btn { flex: none; height: 40px; padding: 0 16px; }
 .wc-x { flex: none; width: 30px; height: 30px; align-self: flex-start; margin: -4px -4px 0 0; }
 .wc-x .ic { width: 16px; height: 16px; }
