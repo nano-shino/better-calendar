@@ -1,5 +1,6 @@
 /* Layout: a quiet paper-white list grouped by day under big plain date numerals,
-   where every event with a photo is a large photo card. One light theme on purpose. */
+   where every event with a photo is a large photo card. Light is the default; the
+   other themes (end of this file) only swap these colors. */
 :root {
   --paper: #ffffff;
   --wash: #f5f6f8;
@@ -22,6 +23,11 @@
   --spring: linear(0, 0.006, 0.025 2.8%, 0.101 6.1%, 0.539 18.9%, 0.721 25.3%, 0.849 31.5%, 0.937 38.1%, 0.968 41.8%, 0.991 45.7%, 1.006 50.1%, 1.015 55%, 1.017 63.9%, 1.001 85.9%, 1);
   --shadow-1: 0 1px 2px rgb(20 24 33 / 0.05), 0 2px 10px rgb(20 24 33 / 0.04);
   --shadow-pop: 0 1px 2px rgb(20 24 33 / 0.06), 0 18px 48px -12px rgb(20 24 33 / 0.22);
+  /* text on an --ink fill (primary button, toast), and the frosted-glass card */
+  --on-ink: #ffffff;
+  --glass: rgb(255 255 255 / 0.86);
+  --bn-bg: #fff5f3; --bn-ink: #7a2e25; --bn-line: #f3cdc6;
+  --toast-act: #8fe0bb;
   color-scheme: light;
 }
 
@@ -59,8 +65,8 @@ svg { display: block; }
 .btn:hover { background: var(--wash); }
 .btn:active { transform: scale(0.97); }
 .btn:disabled { color: var(--ink-3); cursor: default; background: var(--paper); }
-.btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
-.btn.primary:hover { background: #2a2d35; }
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.btn.primary:hover { background: color-mix(in oklab, var(--ink) 88%, var(--paper)); }
 .btn.small { height: 28px; padding: 0 12px; font-size: 12.5px; }
 .btn.wide { width: 100%; }
 .btn .g { width: 16px; height: 16px; background: #fff; border-radius: 50%; padding: 1.5px; }
@@ -129,12 +135,12 @@ body.loading .progress::after { opacity: 1; animation: sweep 1.1s var(--ease) in
 .banner { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 8px var(--side-r) 0 var(--side); }
 .bn {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 8px 8px 8px 14px; border-radius: 12px; background: #fff5f3; color: #7a2e25; font-size: 13px;
+  padding: 8px 8px 8px 14px; border-radius: 12px; background: var(--bn-bg); color: var(--bn-ink); font-size: 13px;
   animation: drop-in 0.45s var(--ease) both;
 }
 .bn-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--now); flex: none; }
 .bn-txt { flex: 1 1 200px; min-width: 0; overflow-wrap: anywhere; }
-.bn .btn { border-color: #f3cdc6; background: #fff; }
+.bn .btn { border-color: var(--bn-line); background: var(--paper); }
 @keyframes drop-in { from { opacity: 0; transform: translateY(-6px); } }
 
 /* ---------- stage: the scrolling list ---------- */
@@ -351,7 +357,7 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
   background: var(--paper); border: 1px solid var(--hair-2); font-size: 12.5px; font-weight: 500; color: var(--ink-2);
   transition: background 0.25s var(--ease), color 0.25s, border-color 0.25s;
 }
-.sc-opt input:checked + .sc-txt { background: var(--ink); color: #fff; border-color: var(--ink); }
+.sc-opt input:checked + .sc-txt { background: var(--ink); color: var(--on-ink); border-color: var(--ink); }
 .sc-opt input:focus-visible + .sc-txt { outline: 2px solid var(--focus); outline-offset: 2px; }
 .kw-input {
   position: relative; z-index: 1; width: 9ch; border: 0; border-bottom: 1px dashed currentColor; background: transparent;
@@ -373,7 +379,7 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
   border: 1.5px dashed var(--hair-2); background: var(--paper); color: var(--ink-2); transition: border-color 0.2s, background 0.2s;
 }
 .pk-drop:hover, .pk-drop.over { border-color: var(--ink-3); }
-.pk-drop.over { background: #fbfcff; }
+.pk-drop.over { background: var(--wash); }
 .pk-drop span { display: flex; flex-direction: column; font-size: 13px; }
 .pk-drop strong { color: var(--ink); font-weight: 600; }
 .pk-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 20px; }
@@ -419,6 +425,7 @@ a.pv-credit:hover { color: #fff; text-decoration: underline; }
 .sw { flex: none; width: 36px; height: 22px; border-radius: 999px; background: var(--hair-2); position: relative; margin-top: 1px; transition: background 0.25s; }
 .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.2); transition: transform 0.35s var(--spring); }
 .sw-row input:checked + .sw { background: var(--ink); }
+.sw-row input:checked + .sw::after { background: var(--on-ink); }
 .sw-row input:checked + .sw::after { transform: translateX(14px); }
 .sw-row input:focus-visible + .sw { outline: 2px solid var(--focus); outline-offset: 2px; }
 .kw-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 3px 0; }
@@ -431,7 +438,7 @@ a.link-btn { text-decoration: none; }
   position: fixed; z-index: 25; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%); width: min(680px, calc(100vw - 32px));
   display: flex; align-items: center; gap: 16px; padding: 14px 14px 14px 20px; border-radius: 18px;
-  background: rgb(255 255 255 / 0.86); backdrop-filter: blur(18px) saturate(1.4);
+  background: var(--glass); backdrop-filter: blur(18px) saturate(1.4);
   box-shadow: var(--shadow-pop); animation: rise 0.7s 0.3s var(--ease) both;
 }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 16px); } }
@@ -446,7 +453,7 @@ a.link-btn { text-decoration: none; }
 .toast {
   position: fixed; z-index: 60; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
   max-width: min(480px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 12px;
-  background: var(--ink); color: #fff; font-size: 13px; box-shadow: var(--shadow-pop);
+  background: var(--ink); color: var(--on-ink); font-size: 13px; box-shadow: var(--shadow-pop);
   animation: toast-in 0.4s var(--spring) both;
 }
 .toast.out { animation: toast-out 0.25s var(--ease-in) both; }
@@ -479,9 +486,9 @@ a.link-btn { text-decoration: none; }
     top: 0; flex-direction: row; align-items: baseline; gap: 8px;
     margin: 0 calc(-1 * var(--side-r)) 10px calc(-1 * var(--side));
     padding: 12px var(--side-r) 8px var(--side); border-radius: 0;
-    background: rgb(255 255 255 / 0.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--hair);
+    background: color-mix(in oklab, var(--paper) 92%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--hair);
   }
-  .day-h.link:hover { background: rgb(255 255 255 / 0.92); }
+  .day-h.link:hover { background: color-mix(in oklab, var(--paper) 92%, transparent); }
   .dh-num { font-size: 22px; font-weight: 500; order: -1; }
   .dh-dow { font-size: 12px; }
   .dh-mon { font-size: 12px; }
@@ -559,7 +566,7 @@ a.link-btn { text-decoration: none; }
 /* Panel for an event without a photo: a slim band instead of a big empty block */
 .pv-photo.is-empty { aspect-ratio: auto; height: 60px; background: color-mix(in oklab, var(--c) 10%, var(--paper)); }
 .pv-photo.is-empty::after { display: none; }
-.pv-photo.is-empty .pv-close { color: var(--ink); background: rgb(255 255 255 / 0.75); }
+.pv-photo.is-empty .pv-close { color: var(--ink); background: color-mix(in oklab, var(--paper) 75%, transparent); }
 .pv-photo.is-empty .pv-credit { display: none; }
 
 
@@ -872,10 +879,86 @@ a.link-btn { text-decoration: none; }
 .toast-txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .toast-btn {
   flex: none; min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; background: none;
-  color: #8fe0bb; font: 600 13px/1 var(--font);
+  color: var(--toast-act); font: 600 13px/1 var(--font);
 }
-.toast-btn:hover { background: rgb(255 255 255 / 0.1); }
+.toast-btn:hover { background: color-mix(in oklab, var(--on-ink) 10%, transparent); }
 
 @media (max-width: 720px) {
   .sw-under { border-radius: 16px; }
 }
+
+/* ---------- themes ---------- */
+/* Each theme swaps the base colors; everything else mixes from them. js/theme.js sets
+   html[data-theme] (Auto resolves to light or dark), and lists the same names. */
+:root[data-theme="solarized"] {
+  --paper: #fdf6e3; --wash: #f3ecd7; --wash-2: #eee8d5; --ink: #073642; --ink-2: #586e75; --ink-3: #93a1a1;
+  --hair: #eee8d5; --hair-2: #ddd6c1; --now: #dc322f; --focus: #268bd2; --done: #859900; --done-tint: #eef0cf;
+  --glass: rgb(253 246 227 / 0.88); --bn-bg: #fbe9dc; --bn-ink: #8f2b22; --bn-line: #f0c9b8;
+}
+:root[data-theme="dark"] {
+  --paper: #121317; --wash: #1b1d22; --wash-2: #24262c; --ink: #eceef2; --ink-2: #a7acb6; --ink-3: #6f747e;
+  --hair: #22242a; --hair-2: #33363d; --now: #ff6b5b; --focus: #6b93ff; --done: #3cc48a;
+}
+:root[data-theme="nord"] {
+  --paper: #2e3440; --wash: #353c4a; --wash-2: #3b4252; --ink: #eceff4; --ink-2: #c2c9d6; --ink-3: #8690a3;
+  --hair: #3b4252; --hair-2: #4c566a; --now: #d08770; --focus: #88c0d0; --done: #a3be8c;
+}
+:root[data-theme="dracula"] {
+  --paper: #282a36; --wash: #303241; --wash-2: #383a4c; --ink: #f8f8f2; --ink-2: #c5c8d6; --ink-3: #8088b4;
+  --hair: #343746; --hair-2: #44475a; --now: #ff79c6; --focus: #bd93f9; --done: #50fa7b;
+}
+:root[data-theme="gruvbox"] {
+  --paper: #282828; --wash: #32302f; --wash-2: #3c3836; --ink: #ebdbb2; --ink-2: #bdae93; --ink-3: #928374;
+  --hair: #3c3836; --hair-2: #504945; --now: #fb4934; --focus: #83a598; --done: #b8bb26;
+}
+/* What every dark theme shares: derived from its own paper, ink and accents. */
+:root:is([data-theme="dark"], [data-theme="nord"], [data-theme="dracula"], [data-theme="gruvbox"]) {
+  color-scheme: dark;
+  --on-ink: var(--paper);
+  --glass: color-mix(in oklab, var(--wash) 88%, transparent);
+  --done-tint: color-mix(in oklab, var(--done) 18%, var(--paper));
+  --bn-bg: color-mix(in oklab, var(--now) 16%, var(--paper));
+  --bn-ink: color-mix(in oklab, var(--now) 35%, var(--ink));
+  --bn-line: color-mix(in oklab, var(--now) 35%, var(--paper));
+  --toast-act: color-mix(in oklab, var(--done) 70%, black);
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 10px rgb(0 0 0 / 0.25);
+  --shadow-pop: 0 0 0 1px var(--hair-2), 0 18px 48px -12px rgb(0 0 0 / 0.6);
+  --strip-night: color-mix(in oklab, #6b6fc0 40%, var(--paper));
+  --strip-dawn: color-mix(in oklab, #e89aa9 32%, var(--paper));
+  --strip-morning: color-mix(in oklab, #f0cb4f 30%, var(--paper));
+  --strip-afternoon: color-mix(in oklab, #f5a524 32%, var(--paper));
+  --strip-evening: color-mix(in oklab, #ec7d68 32%, var(--paper));
+  --strip-past: var(--hair-2);
+}
+/* Sky labels: a dark tint of the sky color with a light ink, instead of pastel on dark. */
+:root:is([data-theme="dark"], [data-theme="nord"], [data-theme="dracula"], [data-theme="gruvbox"])
+  :is(.sky-night, .sky-dawn, .sky-morning, .sky-afternoon, .sky-evening, .part-mark.pm-night, .part-mark.pm-noon, .part-mark.pm-evening) {
+  --sky-ink: color-mix(in oklab, var(--sky) 75%, white);
+  --sky-tint: color-mix(in oklab, var(--sky) 22%, var(--paper));
+}
+/* A past card on top of a stack fades by brightening on light paper; on dark, dim it. */
+:root:is([data-theme="dark"], [data-theme="nord"], [data-theme="dracula"], [data-theme="gruvbox"])
+  .cards > :is(.slot.past:not(.dk-open) > .card.plain.dk-top, .slot:not(.dk-open) > .card.plain.past.dk-top) {
+  filter: grayscale(1) contrast(0.7) brightness(0.8);
+}
+
+/* Theme picker in the accounts menu: a tiny card in each theme's colors. */
+.th-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.th-opt { position: relative; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 4px 2px 2px; border-radius: 10px; cursor: pointer; font-size: 11.5px; color: var(--ink-2); }
+.th-opt:hover { color: var(--ink); }
+.th-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.th-sw {
+  position: relative; width: 100%; height: 34px; border-radius: 9px; overflow: hidden;
+  background: var(--a); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--b) 18%, transparent);
+  transition: box-shadow 0.2s;
+}
+/* a title line and an accent dot, like a plain card */
+.th-sw::before { content: ""; position: absolute; left: 8px; top: 10px; width: 46%; height: 4px; border-radius: 2px; background: var(--b); box-shadow: 0 8px 0 -0.5px color-mix(in oklab, var(--b) 45%, var(--a)); }
+.th-sw::after { content: ""; position: absolute; right: 8px; top: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--c); }
+.th-auto .th-sw { background: linear-gradient(135deg, #ffffff 50%, #121317 50%); }
+.th-auto .th-sw::before { background: #6f747e; box-shadow: none; }
+.th-auto .th-sw::after { background: var(--now); }
+.th-opt input:checked + .th-sw { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--ink); }
+.th-opt input:checked ~ .th-name { color: var(--ink); font-weight: 600; }
+.th-opt input:focus-visible + .th-sw { outline: 2px solid var(--focus); outline-offset: 4px; }
+.th-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

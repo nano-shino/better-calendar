@@ -9,6 +9,10 @@ import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
 import { isDone, setDone } from "./done.js";
 import { setupGestures } from "./gestures.js";
+import { THEMES, currentTheme, setTheme, applyTheme } from "./theme.js";
+
+// index.html already set the attribute; this also sets the browser bar color.
+applyTheme();
 
 
 
@@ -577,6 +581,16 @@ function openPop() {
         h("strong", { text: "Automatic photos" }),
         h("span", { class: "sub", text: "For events whose title clearly says what they are, like gym, flight, dinner or birthday. Other events stay plain until you pick a photo." })),
       autoToggle, h("span", { class: "sw", "aria-hidden": "true" }))));
+
+  const chosen = currentTheme();
+  kids.push(h("section", { class: "pa th" },
+    h("p", { class: "pa-note", id: "thLabel", text: "Theme" }),
+    h("div", { class: "th-list", role: "radiogroup", "aria-labelledby": "thLabel" }, THEMES.map((t) => {
+      const input = h("input", { type: "radio", name: "theme", id: `th-${t.id}`, value: t.id, checked: t.id === chosen });
+      input.addEventListener("change", () => { if (input.checked) setTheme(t.id); });
+      return h("label", { class: `th-opt th-${t.id}`, for: `th-${t.id}`, vars: t.paper ? { "--a": t.paper, "--b": t.ink, "--c": t.accent } : {} },
+        input, h("span", { class: "th-sw", "aria-hidden": "true" }), h("span", { class: "th-name", text: t.name }));
+    }))));
 
   if (prof.rules.keywords.length) {
     kids.push(h("section", { class: "pa kw" },

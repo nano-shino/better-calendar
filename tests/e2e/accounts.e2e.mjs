@@ -116,3 +116,27 @@ test("the welcome card can be dismissed for the session", async () => {
   await page.goto("#week");
   assert.equal((await page.state()).welcomeVisible, false);
 });
+
+test("picking a theme recolors the page, and it is still picked after a reload", async () => {
+  const bg = () => page.eval("getComputedStyle(document.body).backgroundColor");
+  assert.equal(await page.eval("document.documentElement.dataset.theme"), "light");
+  assert.equal(await bg(), "rgb(255, 255, 255)");
+  await page.click("#acctBtn");
+  await page.click('label[for="th-dracula"]');
+  assert.equal(await page.eval("document.documentElement.dataset.theme"), "dracula");
+  assert.equal(await bg(), "rgb(40, 42, 54)");
+  assert.equal(await page.eval("document.querySelector('meta[name=theme-color]').content"), "#282a36");
+  assert.equal(await popOpen(), true, "the menu stays open while picking");
+
+  await page.goto("?mock#week");
+  assert.equal(await bg(), "rgb(40, 42, 54)");
+  await page.click("#acctBtn");
+  assert.equal(await page.eval("document.getElementById('th-dracula').checked"), true);
+
+  // Auto follows the system, whichever it is on this machine.
+  await page.click('label[for="th-auto"]');
+  const system = await page.eval("matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'");
+  assert.equal(await page.eval("document.documentElement.dataset.theme"), system);
+  await page.click('label[for="th-light"]');
+  await page.key("Escape");
+});
