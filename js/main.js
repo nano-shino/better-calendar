@@ -9,7 +9,8 @@ import { sampleEvents, sampleCalendars } from "./sample.js";
 import { resetMemo, removeKeyword } from "./photos.js";
 import { isDone, setDone } from "./done.js";
 import { setupGestures } from "./gestures.js";
-import { THEMES, currentTheme, setTheme, applyTheme, immersiveCards, setImmersiveCards } from "./theme.js";
+import { place, locate, forgetPlace, refreshPlace } from "./sun.js";
+import { THEMES, currentTheme, setTheme, applyTheme, immersiveCards, setImmersiveCards, textFirstCards, setTextFirstCards } from "./theme.js";
 
 // index.html already set the attribute; this also sets the browser bar color.
 applyTheme();
@@ -243,6 +244,7 @@ const setView = (view, anchor = S.target.anchor) => {
 // starts at today when it is in view, or at the top.
 function render(keepScroll) {
   const prevScroll = stage.scrollTop;
+  const anchor = keepScroll ? scrollAnchor() : null;
   const done = S.tab === "done";
   const events = S.events.filter((e) => visible(e) && isDone(e) === done);
   const ctx = { openEvent: (e) => openPanel(e), openDay: (d) => setView("day", startOfDay(d)), done: isDone, completed: done, leaveTab: () => setTab("plan") };
@@ -253,9 +255,38 @@ function render(keepScroll) {
   stage.replaceChildren(renderList(days, events, ctx, S.view));
   stage.dataset.view = S.view;
   stage.dataset.tab = S.tab;
-  if (keepScroll) stage.scrollTop = prevScroll;
+  if (keepScroll) { if (!restoreAnchor(anchor)) stage.scrollTop = prevScroll; }
   else scrollToToday(false);
   renderHeader();
+}
+
+// Keeping the place across a re-render or a layout switch: the same pixel offset lands
+// on other events once the cards above change height, so remember the first card in
+// view (or its day) and where it sat, and put it back there.
+function scrollAnchor() {
+  const top = stage.getBoundingClientRect().top;
+  // The first card that starts in view: one cut off at the top may itself change height.
+  const startsInView = (el) => el.getBoundingClientRect().top >= top - 1;
+  const inView = (el) => el.getBoundingClientRect().bottom > top + 1;
+  const el = [...stage.querySelectorAll(".day .card[data-id]")].find(startsInView) || [...stage.querySelectorAll(".day[data-day]")].find(inView);
+  if (!el) return null;
+  return { day: el.closest(".day[data-day]")?.dataset.day, id: el.dataset.id || null, off: el.getBoundingClientRect().top - top };
+}
+
+function restoreAnchor(a) {
+  if (!a?.day) return false;
+  const day = stage.querySelector(`.day[data-day="${CSS.escape(a.day)}"]`);
+  const el = a.id ? day?.querySelector(`.card[data-id="${CSS.escape(a.id)}"]`) : day;
+  if (!el) return false;
+  stage.scrollTop += el.getBoundingClientRect().top - stage.getBoundingClientRect().top - a.off;
+  return true;
+}
+
+// A display switch that changes card heights without a re-render keeps the place too.
+function keepPlace(change) {
+  const a = scrollAnchor();
+  change();
+  restoreAnchor(a);
 }
 
 // Slide/fade the new list and title in. No overlay, so clicks keep working mid-animation.
@@ -598,7 +629,16 @@ function openPop() {
   }
   // Advanced: choices most people never need, folded away until asked for.
   const immersive = h("input", { type: "checkbox", id: "immersiveCards", role: "switch", checked: immersiveCards() });
-  immersive.addEventListener("change", () => setImmersiveCards(immersive.checked));
+  immersive.addEventListener("change", () => keepPlace(() => setImmersiveCards(immersive.checked)));
+  const textFirst = h("input", { type: "checkbox", id: "textFirstCards", role: "switch", checked: textFirstCards() });
+  textFirst.addEventListener("change", () => keepPlace(() => setTextFirstCards(textFirst.checked)));
+  // Sunrise and sunset: the browser's location prompt must come from this click.
+  const sunHere = h("input", { type: "checkbox", id: "sunHere", role: "switch", checked: !!place() });
+  sunHere.addEventListener("change", async () => {
+    if (!sunHere.checked) { forgetPlace(); render(true); return; }
+    try { await locate({ maximumAge: 0 }); render(true); }
+    catch (e) { sunHere.checked = false; toast(e.message); }
+  });
   const adv = h("details", { class: "pa adv", open: advOpen },
     h("summary", { class: "adv-sum" }, h("span", { text: "Advanced" }),
       h("span", { class: "adv-chev", "aria-hidden": "true" })),
@@ -612,7 +652,17 @@ function openPop() {
         h("span", { class: "sw-txt" },
           h("strong", { text: "Immersive photo cards" }),
           h("span", { class: "sub", text: "Photo cards as dark panels over a blurred copy of their photo." })),
-        immersive, h("span", { class: "sw", "aria-hidden": "true" }))));
+        immersive, h("span", { class: "sw", "aria-hidden": "true" })),
+      h("label", { class: "sw-row", for: "textFirstCards" },
+        h("span", { class: "sw-txt" },
+          h("strong", { text: "Title beside the time" }),
+          h("span", { class: "sub", text: "Each event's title right next to its time, with the photo on the right, as tall as the event is long." })),
+        textFirst, h("span", { class: "sw", "aria-hidden": "true" })),
+      h("label", { class: "sw-row", for: "sunHere" },
+        h("span", { class: "sw-txt" },
+          h("strong", { text: "Sunrise and sunset where you are" }),
+          h("span", { class: "sub", text: "The Now line shows a moon once the sun has set. Uses this device's location, kept on this device only. Otherwise night is 9 PM to 6 AM." })),
+        sunHere, h("span", { class: "sw", "aria-hidden": "true" }))));
   adv.addEventListener("toggle", () => { advOpen = adv.open; });
   kids.push(adv);
 
@@ -737,6 +787,8 @@ async function boot() {
   S.target = { view: S.view, anchor: S.anchor };
   addEventListener("hashchange", () => hashView() && setView(hashView()));
   wire();
+  // A saved place for sunrise and sunset follows the device when it moves (never prompts).
+  refreshPlace().then((moved) => { if (moved) render(true); });
   const remembered = loadJSON("bd:session", null);
   if (!MOCK && store.configured && Array.isArray(remembered) && remembered.length) {
     S.pending = remembered;

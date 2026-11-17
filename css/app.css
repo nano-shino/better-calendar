@@ -222,9 +222,13 @@ body.loading .progress::after { opacity: 1; animation: sweep 1.1s var(--ease) in
 .c-loc + .c-cal::before { content: "·"; margin-right: 1px; }
 .c-cal .dot { width: 7px; height: 7px; }
 .c-cal-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Past events go grey and quiet; hover or focus brings the colour back, so an old photo can still be looked at. */
-.card.past { filter: grayscale(1); opacity: 0.55; }
-.card.past:hover, .card.past:focus-visible { opacity: 1; filter: none; }
+/* Past events go grey and quiet the same way as their time column (.slot.past .c-clock):
+   only the contents fade, so the card keeps the same paper and hairline as any other
+   (fading the whole card greyed the paper into a slab on tinted themes). Hover or focus
+   brings the colour back, so an old photo can still be looked at. */
+.card > :is(.c-art, .c-thumb, .c-tile, .c-body) { transition: opacity 0.3s, filter 0.3s; }
+.card.past > :is(.c-art, .c-thumb, .c-tile, .c-body) { opacity: 0.45; filter: grayscale(1); }
+.card.past:is(:hover, :focus-visible) > :is(.c-art, .c-thumb, .c-tile, .c-body) { opacity: 1; filter: none; }
 .card.allday.photo { --art-w: 176px; }
 .card:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; border-radius: var(--r-lg); }
 
@@ -776,13 +780,8 @@ a.link-btn { text-decoration: none; }
 .slot.dk-notime:not(.dk-open) .c-at { display: inline; }
 .card.dk-top,
 .card.dk-top:hover { box-shadow: inset 0 0 0 1px var(--hair-2), -6px 0 16px -10px rgb(20 24 33 / 0.25), 0 12px 24px -14px rgb(20 24 33 / 0.3); }
-/* A card lying on another must be opaque, or the one below shows through when it fades.
-   Only while stacked: spread out, it fades like any past card. Hover and focus bring
-   its colour back either way (these selectors must outrank the ones above). */
-.cards > .slot.past:not(.dk-open) > .card.dk-top,
-.cards > .slot:not(.dk-open) > .card.past.dk-top { opacity: 1; filter: grayscale(1) contrast(0.55) brightness(1.17); }
-.cards > .slot:not(.dk-open) > .card.dk-top.dk-top:hover,
-.cards > .slot:not(.dk-open) > .card.dk-top.dk-top:focus-visible { opacity: 1; filter: none; }
+/* A past card fades only its contents (.card.past), so a card lying on another stays
+   opaque and the one below never shows through. */
 
 /* spread apart: ordinary cards in a row; the time column stacks them again */
 .cards > li.dk-tuck.dk-open { margin-top: 0; }
@@ -893,11 +892,6 @@ a.link-btn { text-decoration: none; }
   :is(.sky-night, .sky-dawn, .sky-morning, .sky-afternoon, .sky-evening, .part-mark.pm-night, .part-mark.pm-noon, .part-mark.pm-evening) {
   --sky-ink: color-mix(in oklab, var(--sky) 75%, white);
 }
-/* A past card on top of a stack fades by brightening on light paper; on dark, dim it. */
-:root:is([data-theme="dark"], [data-theme="nord"], [data-theme="dracula"], [data-theme="gruvbox"])
-  .cards > :is(.slot.past:not(.dk-open) > .card.dk-top, .slot:not(.dk-open) > .card.past.dk-top) {
-  filter: grayscale(1) contrast(0.7) brightness(0.8);
-}
 
 /* Theme picker in the accounts menu: a tiny card in each theme's colors. */
 .th-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
@@ -947,7 +941,10 @@ a.link-btn { text-decoration: none; }
 :root[data-cards="immersive"] .card.photo .c-cal .dot { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.75); }
 :root[data-cards="immersive"] .card.photo.dk-top { box-shadow: -8px 0 18px -10px rgb(12 14 20 / 0.4), 0 16px 30px -14px rgb(12 14 20 / 0.5); }
 :root[data-cards="immersive"] .slot.dk-open > .card.photo.dk-top { box-shadow: none; }
-:root[data-cards="immersive"] .cards > .slot.past:not(.dk-open) > .card.photo.dk-top { filter: grayscale(1) brightness(0.8); }
+/* Immersive: the slab is the photo's own colours, so a past one greys as a whole, kept opaque. */
+:root[data-cards="immersive"] .card.photo.past { filter: grayscale(1) brightness(0.8); }
+:root[data-cards="immersive"] .card.photo.past > :is(.c-art, .c-body) { opacity: 1; filter: none; }
+:root[data-cards="immersive"] .card.photo.past:is(:hover, :focus-visible) { filter: none; }
 .c-glow {
   position: absolute; inset: -40px; z-index: -2; background-size: cover; background-position: center;
   filter: blur(30px) saturate(1.4) brightness(0.55); opacity: 0; transition: opacity 0.8s var(--ease);
@@ -956,3 +953,38 @@ a.link-btn { text-decoration: none; }
 .card.photo:has(.c-art > .ph.shown) .c-glow { opacity: 1; }
 /* A photo painted at once (already seen) brings its glow at once too, or re-renders dim every card. */
 .card.photo:has(.c-art > .ph.instant) .c-glow { transition: none; }
+
+/* ---------- text-first cards (Advanced) ---------- */
+/* html[data-layout="text-first"]: the title sits right beside the time column, at the
+   top of the card, so the eye reads time → title in one line. The picture moves to the
+   card's right edge, flush and as tall as the card, and a photo card is as tall as the
+   event is long (like the bar in the time column), within limits. Plain cards drop the
+   calendar glyph: with pictures on the right, titles line up without it. */
+:root[data-layout="text-first"] .card.photo, :root[data-layout="text-first"] .card.has-thumb { align-items: stretch; padding: 0; gap: 0; }
+:root[data-layout="text-first"] :is(.c-art, .c-thumb, .c-tile) { order: 1; align-self: stretch; border-radius: 0; }
+:root[data-layout="text-first"] .card .c-body { justify-content: flex-start; }
+:root[data-layout="text-first"] .card.photo .c-body, :root[data-layout="text-first"] .card.has-thumb .c-body { padding: 12px 16px; }
+:root[data-layout="text-first"] .card.plain:not(.has-thumb) { padding: 12px 16px; }
+:root[data-layout="text-first"] .c-tile:not(.c-tile-blank) { display: none; }
+:root[data-layout="text-first"] .card.photo {
+  --h-base: 60px; --h-min: 84px; --h-max: 180px; --h-rate: 0.5px; --art-w: 200px;
+  min-height: clamp(var(--h-min), calc(var(--h-base) + var(--len, 60) * var(--h-rate)), var(--h-max));
+}
+:root[data-layout="text-first"] .card.photo.allday { --art-w: 160px; }
+:root[data-layout="text-first"] .c-art { aspect-ratio: auto; min-height: 0; }
+:root[data-layout="text-first"] :is(.c-thumb, .c-tile) { width: 96px; height: auto; min-height: 64px; }
+:root[data-layout="text-first"] .mode-day .card.photo { padding: 0; gap: 0; --h-base: 96px; --h-min: 120px; --h-max: 300px; --h-rate: 0.8px; --art-w: min(380px, 48%); }
+:root[data-layout="text-first"] .mode-day .card.photo .c-body { padding: 16px 20px; }
+:root[data-layout="text-first"] .mode-day .card.photo.allday { --art-w: 220px; }
+:root[data-layout="text-first"] .mode-month .card.photo { --h-base: 56px; --h-min: 72px; --h-max: 140px; --h-rate: 0.4px; --art-w: 160px; }
+:root[data-layout="text-first"] .mode-month .card.photo.allday { --art-w: 130px; }
+:root[data-layout="text-first"][data-cards="immersive"] .c-art { box-shadow: none; }
+@media (max-width: 720px) {
+  :root[data-layout="text-first"] .card.photo, :root[data-layout="text-first"] .card.has-thumb { padding: 0; gap: 0; }
+  :root[data-layout="text-first"] .agenda:not(.mode-day) .card.photo { --art-w: min(38%, 140px); }
+  :root[data-layout="text-first"] :is(.c-thumb, .c-tile) { width: 84px; height: auto; }
+  /* Day view on a phone: the text on top, the whole photo below it, full width. */
+  :root[data-layout="text-first"] .mode-day .card.photo { padding: 0; gap: 0; min-height: 0; --art-w: 100%; }
+  :root[data-layout="text-first"] .mode-day .card.photo .c-art { aspect-ratio: 16 / 9; }
+  :root[data-layout="text-first"] .mode-day .card.photo .c-body { padding: 12px 16px 10px; }
+}

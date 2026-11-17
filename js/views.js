@@ -3,6 +3,7 @@
 import { h, addDays, startOfDay, sameDay, fmt, timeRange, duration } from "./util.js";
 import { photoFor, cachedPhoto, expectsPhoto } from "./photos.js";
 import { overlapUnits } from "./overlaps.js";
+import { daylight, isNight } from "./sun.js";
 
 const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, (c) => encodeURIComponent(c))}")`;
 
@@ -227,13 +228,13 @@ function partMark(day, p, now) {
     h("span", { class: "pm-time", "aria-hidden": "true", text: fmt.hour.format(at) }));
 }
 
-// The Now line's mark on the strip: a sun by day, a crescent moon at night (9 PM to
-// 6 AM, the same span the header's sun arc treats as night).
+// The Now line's mark on the strip: a sun by day, a crescent moon after sunset (the same
+// span the header's sun arc treats as night; 9 PM to 6 AM without a saved place).
 const NOW_SUN = '<circle class="nm-disc" cx="12" cy="12" r="5"/><path class="nm-rays" d="M12 1.8v2.4M12 19.8v2.4M1.8 12h2.4M19.8 12h2.4M4.8 4.8l1.7 1.7M17.5 17.5l1.7 1.7M4.8 19.2l1.7-1.7M17.5 6.5l1.7-1.7"/>';
 const NOW_MOON = '<path class="nm-moon" d="M18.3 14.9A7.2 7.2 0 0 1 9.1 5.7a7.2 7.2 0 1 0 9.2 9.2Z"/>';
 
 function nowMark(now) {
-  const night = skyOf(now) === "night";
+  const night = isNight(now);
   const icon = svg(night ? NOW_MOON : NOW_SUN);
   icon.setAttribute("class", "nm-ic");
   return h("li", { class: "now-mark", dataset: { sky: skyOf(now) }, "aria-label": `Now, ${fmt.time.format(now)}` },
@@ -307,20 +308,22 @@ function clock(ev, day) {
     h("i", { class: "ck-bar" }));
 }
 
-// Today's header: a sun on an arc from 6 AM to 9 PM, so a glance says how much of the
-// day is left. A fixed span (no sunrise data needed); outside it, a moon at either end.
+// Today's header: a sun on an arc from sunrise to sunset (6 AM to 9 PM without a saved
+// place, see sun.js), so a glance says how much of the day is left; outside it, a moon
+// at either end.
 function sunArc(now) {
-  const t = (now.getHours() * 60 + now.getMinutes() - 360) / (15 * 60);
+  const { start, end } = daylight(now), night = isNight(now);
+  const t = end > start ? (now - start) / (end - start) : -1;
   const k = Math.min(1, Math.max(0, t));
   const x = (32 - 26 * Math.cos(Math.PI * k)).toFixed(1), y = (30 - 26 * Math.sin(Math.PI * k)).toFixed(1);
   const done = k > 0 ? `<path class="sa-done" d="M6 30A26 26 0 0 1 ${x} ${y}"/>` : "";
-  const body = t < 0 || t > 1
+  const body = night
     ? `<path class="sa-moon" transform="translate(${x - 5} ${y - 5})" d="M8.5 6.6A4 4 0 0 1 3.4 1.5a4 4 0 1 0 5.1 5.1Z"/>`
     : `<circle class="sa-halo" cx="${x}" cy="${y}" r="7"/><circle class="sa-sun" cx="${x}" cy="${y}" r="4"/>`;
   const el = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   el.setAttribute("viewBox", "0 0 64 34");
   el.setAttribute("aria-hidden", "true");
-  el.setAttribute("class", `dh-sun${t < 0 || t > 1 ? " night" : ""}`);
+  el.setAttribute("class", `dh-sun${night ? " night" : ""}`);
   el.dataset.progress = k.toFixed(3);
   el.innerHTML = `<path class="sa-track" d="M6 30A26 26 0 0 1 58 30"/><path class="sa-ground" d="M2 30H62"/>${done}${body}`;
   return el;
@@ -378,7 +381,9 @@ function card(ev, now, ctx, lead, opts = {}) {
     class: `card ${big ? "photo" : "plain"}${thumb || tile ? " has-thumb" : ""}${ev.allDay ? " allday" : ""}${past ? " past" : ""}${live ? " live" : ""}${opts.top ? " dk-top" : ""}${done ? " done" : ""}`,
     type: "button",
     dataset: { id: ev.id },
-    vars: { "--c": ev.color, "--progress": live ? ((now - ev.start) / (ev.end - ev.start)).toFixed(3) : 0 },
+    // --len: the event's length in minutes (capped at a day); text-first cards grow with it
+    vars: { "--c": ev.color, "--progress": live ? ((now - ev.start) / (ev.end - ev.start)).toFixed(3) : 0,
+      "--len": ev.allDay ? 60 : Math.round(Math.min(1440, Math.max(0, ev.end - ev.start) / 60000)) },
     "aria-label": `${ev.title}, ${whenLabel(ev)}${ev.location ? `, ${ev.location}` : ""}${opts.overlaps ? `, overlaps ${opts.overlaps}` : ""}${done ? ", done" : ""}`,
     "aria-expanded": opts.stacked ? "false" : null,
     onclick: (e) => {

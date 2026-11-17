@@ -16,12 +16,14 @@
     // The saved theme and card style before the first paint, so a dark theme never
     // flashes white. Same keys, defaults and Auto rule as js/theme.js.
     (function () {
-      var t = "light", im = false;
+      var t = "light", im = false, tf = false;
       try { t = JSON.parse(localStorage.getItem("bd:theme")) || t; } catch (e) {}
       try { im = JSON.parse(localStorage.getItem("bd:immersive")) === true; } catch (e) {}
+      try { tf = JSON.parse(localStorage.getItem("bd:textFirst")) === true; } catch (e) {}
       if (t === "auto") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
       document.documentElement.dataset.theme = t;
       if (im) document.documentElement.dataset.cards = "immersive";
+      if (tf) document.documentElement.dataset.layout = "text-first";
     })();
   </script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -35,6 +37,7 @@
   <link rel="modulepreload" href="js/store.js">
   <link rel="modulepreload" href="js/views.js">
   <link rel="modulepreload" href="js/overlaps.js">
+  <link rel="modulepreload" href="js/sun.js">
   <link rel="modulepreload" href="js/panel.js">
   <link rel="modulepreload" href="js/photos.js">
   <link rel="modulepreload" href="js/curated.js">

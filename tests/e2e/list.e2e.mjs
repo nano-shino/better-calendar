@@ -163,24 +163,30 @@ test("today's header has the sun arc in Day view only, placed by the time of day
 });
 
 test("past events are grey until hovered", async () => {
+  // Only the contents fade, like the time column: the card itself keeps the paper and
+  // background of an upcoming one, so a past card never turns into a grey slab.
+  const shell = (t) => page.eval(`(() => { const s = getComputedStyle(${slotOf(t)}.querySelector('.card'));
+    return [s.filter, s.opacity, s.backgroundColor].join(' / '); })()`);
+  assert.equal(await shell("Team standup"), await shell("Coffee with Alex"));
   const past = await page.eval(`(() => { const li = ${slotOf("Team standup")};
-    return { card: getComputedStyle(li.querySelector('.card')).filter, clock: getComputedStyle(li.querySelector('.c-clock')).filter }; })()`);
-  assert.match(past.card, /grayscale\(1\)/);
+    return { body: getComputedStyle(li.querySelector('.c-body')).filter, clock: getComputedStyle(li.querySelector('.c-clock')).filter }; })()`);
+  assert.match(past.body, /grayscale\(1\)/);
   assert.match(past.clock, /grayscale\(1\)/);
-  assert.equal(await page.eval(`getComputedStyle(${slotOf("Coffee with Alex")}.querySelector('.card')).filter`), "none");
+  assert.equal(await page.eval(`getComputedStyle(${slotOf("Coffee with Alex")}.querySelector('.c-body')).filter`), "none");
   const id = await page.eval(`${slotOf("Team standup")}.querySelector('.card').dataset.id`);
-  await page.hover(`.day.today .card[data-id="${id}"]`);
-  await page.waitFor(`getComputedStyle(document.querySelector('.day.today .card[data-id="${id}"]')).filter === 'none'`);
-  // The standup lies on breakfast. Spread out, it fades like the card beside it and lights up the same way.
   const sel = `.day.today .card[data-id="${id}"]`;
+  const lit = `getComputedStyle(document.querySelector('${sel} > .c-body')).filter === 'none' && getComputedStyle(document.querySelector('${sel} > .c-body')).opacity === '1'`;
+  await page.hover(sel);
+  await page.waitFor(lit);
+  // The standup lies on breakfast. Spread out, it fades like the card beside it and lights up the same way.
   await page.click(sel);
   await page.waitFor(`document.querySelector('${sel}').closest('li').classList.contains('dk-open')`);
   await page.hover('#title');
   await page.settle();
-  const look = (t) => page.eval(`(() => { const s = getComputedStyle(${slotOf(t)}.querySelector('.card')); return s.filter + ' / ' + s.opacity; })()`);
+  const look = (t) => page.eval(`(() => { const s = getComputedStyle(${slotOf(t)}.querySelector('.card > .c-body')); return s.filter + ' / ' + s.opacity; })()`);
   assert.equal(await look('Team standup'), await look('Breakfast with Sam'));
   await page.hover(sel);
-  await page.waitFor(`getComputedStyle(document.querySelector('${sel}')).filter === 'none' && getComputedStyle(document.querySelector('${sel}')).opacity === '1'`);
+  await page.waitFor(lit);
   const clock = await page.eval(`(() => { const b = ${slotOf('Team standup')}.querySelector('.c-clock').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + 12 }; })()`);
   await page.clickAt(clock.x, clock.y);
   await page.waitFor(`!${slotOf('Team standup')}.classList.contains('dk-open')`);

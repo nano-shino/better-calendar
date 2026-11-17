@@ -54,9 +54,27 @@ export function setImmersiveCards(on) {
   applyCards(!!on);
 }
 
+// Text-first cards (Advanced): the title right beside the time column, the photo on
+// the card's right edge, as tall as the card, and a photo card as tall as the event
+// is long. Applied before the first paint too, as html[data-layout="text-first"].
+const LAYOUT_KEY = "bd:textFirst";
+
+export const textFirstCards = () => loadJSON(LAYOUT_KEY, false) === true;
+
+export function applyLayout(on = textFirstCards()) {
+  if (on) document.documentElement.dataset.layout = "text-first";
+  else delete document.documentElement.dataset.layout;
+}
+
+export function setTextFirstCards(on) {
+  saveJSON(LAYOUT_KEY, !!on);
+  applyLayout(!!on);
+}
+
 systemDark.addEventListener("change", () => { if (currentTheme() === "auto") applyTheme(); });
 // Another tab changed it: follow along.
 addEventListener("storage", (e) => {
   if (e.key === KEY) applyTheme();
   if (e.key === CARDS_KEY) applyCards();
+  if (e.key === LAYOUT_KEY) applyLayout();
 });

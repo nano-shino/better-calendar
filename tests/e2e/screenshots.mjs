@@ -14,7 +14,18 @@ for (const viewport of Object.keys(VIEWPORTS)) {
     await sleep(800);
     shots.push(await page.screenshot(`${viewport}-${view}`));
   }
+  // The same three views with "Title beside the time" (Advanced) on.
+  await page.eval("localStorage.setItem('bd:textFirst', 'true')");
+  for (const view of ["day", "week", "month"]) {
+    await page.goto(`?mock#${view}`);
+    await page.reload();
+    await sleep(800);
+    shots.push(await page.screenshot(`${viewport}-${view}-text-first`));
+  }
+  await page.eval("localStorage.removeItem('bd:textFirst')");
   await page.goto("?mock#week");
+  await page.reload();
+  await sleep(400);
   await page.click(".card.photo");
   await sleep(900);
   shots.push(await page.screenshot(`${viewport}-panel`));

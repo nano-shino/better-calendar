@@ -177,3 +177,104 @@ test("Advanced holds the immersive cards switch: dark photo cards, kept after a 
     assert.deepEqual(page.errors, []);
   } finally { await page.close(); }
 });
+
+test("flipping an Advanced switch keeps the list where it was", async () => {
+  const page = await launch();
+  try {
+    await page.goto("?mock#month");
+    await page.waitFor("document.querySelectorAll('.card.photo').length > 3");
+    // Scroll a card a little way down from the top, so cards above it change height on every switch.
+    const id = await page.eval(`(() => { const s = document.getElementById('stage'), cards = [...s.querySelectorAll('.day .card[data-id]')];
+      const c = cards[Math.floor(cards.length / 2)]; s.scrollTop += c.getBoundingClientRect().top - s.getBoundingClientRect().top - 40;
+      return c.closest('.day').dataset.day + '|' + c.dataset.id; })()`);
+    const offset = () => page.eval(`(() => { const [d, i] = ${JSON.stringify(id)}.split('|'), s = document.getElementById('stage');
+      return document.querySelector('.day[data-day="' + d + '"] .card[data-id="' + i + '"]').getBoundingClientRect().top - s.getBoundingClientRect().top; })()`);
+    const before = await offset();
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    for (const sw of ["textFirstCards", "immersiveCards", "autoPhotos", "autoPhotos", "textFirstCards"]) {
+      await page.click(`label[for="${sw}"]`);
+      await page.waitFor(`document.getElementById('${sw}')`);
+      const now = await offset();
+      assert.ok(Math.abs(now - before) < 2, `after ${sw}, the card at the top moved from ${before} to ${now}`);
+    }
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test("Advanced holds the sunrise-and-sunset switch: after sunset the Now mark is a moon", async () => {
+  // 7 PM in November: still "evening" on the fixed clock, but dark for hours at 45° N.
+  const page = await launch({ now: "2026-11-16T19:00:00" });
+  try {
+    await page.send("Browser.grantPermissions", { permissions: ["geolocation"], origin: new URL(process.env.BASE_URL).origin });
+    await page.send("Emulation.setGeolocationOverride", { latitude: 45.04, longitude: 0.02, accuracy: 100 });
+    await page.goto("?mock#week");
+    const moon = () => page.eval("!!document.querySelector('.day.today .nm-sun.night .nm-moon')");
+    await page.waitFor("document.querySelector('.day.today .nm-sun')");
+    assert.equal(await moon(), false, "without a place, 7 PM is a sun");
+
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    await page.click('label[for="sunHere"]');
+    await page.waitFor("document.querySelector('.day.today .nm-sun.night .nm-moon')");
+    assert.deepEqual(await page.eval("JSON.parse(localStorage.getItem('bd:place'))"), { lat: 45, lon: 0 }, "kept on this device, rounded");
+
+    await page.reload();
+    await page.waitFor("document.querySelector('.day.today .nm-sun')");
+    assert.equal(await moon(), true, "still known after a reload");
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    assert.equal(await page.eval("document.getElementById('sunHere').checked"), true);
+    await page.click('label[for="sunHere"]');
+    await page.waitFor("!document.querySelector('.day.today .nm-sun.night')");
+    assert.equal(await page.eval("localStorage.getItem('bd:place')"), "null", "turning it off forgets the place");
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
+
+test("Advanced holds the title-beside-the-time switch: photo on the right, as tall as the event", async () => {
+  const page = await launch();
+  try {
+    await page.goto("?mock#week");
+    await page.waitFor("document.querySelector('.card.photo')");
+    const layout = () => page.eval(`[...document.querySelectorAll('.card.photo')].filter((c) => c.checkVisibility()).map((c) => {
+      const card = c.getBoundingClientRect(), art = c.querySelector('.c-art').getBoundingClientRect(), body = c.querySelector('.c-body').getBoundingClientRect();
+      return { right: Math.abs(art.right - card.right) < 1.5 && art.left >= body.right - 1, tall: Math.abs(art.height - card.height) < 1.5,
+        bodyTop: body.top - card.top, h: card.height, len: +getComputedStyle(c).getPropertyValue('--len') };
+    })`);
+    assert.ok((await layout()).every((c) => !c.right), "the photo is on the left by default");
+    assert.equal(await page.eval("!!document.querySelector('.card.plain .c-tile:not(.c-tile-blank)')?.checkVisibility()"), true);
+
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    await page.click('label[for="textFirstCards"]');
+    assert.equal(await page.eval("document.documentElement.dataset.layout"), "text-first");
+    await page.key("Escape");
+
+    const cards = await layout();
+    assert.ok(cards.length > 1);
+    for (const c of cards) {
+      assert.ok(c.right, "photo flush on the right, after the text");
+      assert.ok(c.tall, "photo as tall as the card");
+      assert.ok(c.bodyTop < 2, "text starts at the top of the card, level with the time");
+    }
+    const longest = cards.reduce((a, b) => (b.len > a.len ? b : a)), shortest = cards.reduce((a, b) => (b.len < a.len ? b : a));
+    assert.ok(longest.h > shortest.h, `${longest.len} min (${longest.h}px) is taller than ${shortest.len} min (${shortest.h}px)`);
+    assert.equal(await page.eval("!!document.querySelector('.card.plain .c-tile:not(.c-tile-blank)')?.checkVisibility()"), false, "no calendar glyph");
+
+    await page.reload();
+    assert.equal(await page.eval("document.documentElement.dataset.layout"), "text-first", "applied before the app runs");
+    await page.waitFor("document.querySelector('.card.photo')");
+    await page.click("#acctBtn");
+    await page.click(".pop .adv-sum");
+    await page.waitFor("document.querySelector('.pop .adv')?.open");
+    assert.equal(await page.eval("document.getElementById('textFirstCards').checked"), true);
+    await page.click('label[for="textFirstCards"]');
+    assert.equal(await page.eval("document.documentElement.dataset.layout"), undefined);
+    assert.deepEqual(page.errors, []);
+  } finally { await page.close(); }
+});
