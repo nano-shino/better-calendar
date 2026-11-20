@@ -256,6 +256,12 @@ test("events that start together start at the same height, the shorter one on to
   const vis = await page.eval(`getComputedStyle(${cardOf("Interview")}.closest('li').querySelector('.ck-time')).visibility`);
   assert.equal(vis, "hidden");
   assert.equal(await page.eval(`${cardOf("Interview")}.querySelector('.c-at')`), null);
+  // Told apart: a ring of paper cuts the top card out of the one below, which is dimmed.
+  const paper = await page.eval(`getComputedStyle(document.body).backgroundColor`);
+  assert.ok((await page.eval(`getComputedStyle(${cardOf("Interview")}).boxShadow`)).includes(`${paper} 0px 0px 0px 4px`), "a ring of paper around the top card");
+  const pic = (t) => page.eval(`getComputedStyle(${cardOf(t)}.querySelector(':is(.c-art, .c-thumb, .c-tile)')).filter`);
+  assert.match(await pic("Design review"), /brightness\(0\.86\)/);
+  assert.equal(await pic("Interview"), "none");
 });
 
 test("a start time with no room in the time column shows in the card instead", async () => {

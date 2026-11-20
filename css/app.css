@@ -766,8 +766,12 @@ a.link-btn { text-decoration: none; }
 .slot.dk-same:not(.dk-open) > .c-clock > :not(.ck-bar) { visibility: hidden; }
 .c-at { display: none; }
 .slot.dk-notime:not(.dk-open) .c-at { display: inline; }
+/* Two light photos side by side read as one card, so the top card is cut out of the one
+   below by a ring of paper, and the one below is dimmed, as if behind it. */
 .card.dk-top,
-.card.dk-top:hover { box-shadow: inset 0 0 0 1px var(--hair-2), -6px 0 16px -10px rgb(20 24 33 / 0.25), 0 12px 24px -14px rgb(20 24 33 / 0.3); }
+.card.dk-top:hover { box-shadow: inset 0 0 0 1px var(--hair-2), 0 0 0 4px var(--paper), -6px 0 16px -8px rgb(20 24 33 / 0.3), 0 12px 24px -14px rgb(20 24 33 / 0.3); }
+.slot.dk-under:not(.dk-open) > .card:not(:hover, :focus-visible) { background: var(--wash); }
+.slot.dk-under:not(.dk-open) > .card:not(.past, :hover, :focus-visible) > :is(.c-art, .c-thumb, .c-tile) { filter: brightness(0.86) saturate(0.65); }
 /* A past card fades only its contents (.card.past), so a card lying on another stays
    opaque and the one below never shows through. */
 
@@ -927,7 +931,7 @@ a.link-btn { text-decoration: none; }
 :root[data-cards="immersive"] .c-art { background: rgb(255 255 255 / 0.08); box-shadow: 0 6px 20px -8px rgb(0 0 0 / 0.5); }
 :root[data-cards="immersive"] .card.photo :is(.c-when, .c-meta) { color: rgb(255 255 255 / 0.85); }
 :root[data-cards="immersive"] .card.photo .c-cal .dot { box-shadow: 0 0 0 1.5px rgb(255 255 255 / 0.75); }
-:root[data-cards="immersive"] .card.photo.dk-top { box-shadow: -8px 0 18px -10px rgb(12 14 20 / 0.4), 0 16px 30px -14px rgb(12 14 20 / 0.5); }
+:root[data-cards="immersive"] .card.photo.dk-top { box-shadow: 0 0 0 4px var(--paper), -8px 0 18px -10px rgb(12 14 20 / 0.4), 0 16px 30px -14px rgb(12 14 20 / 0.5); }
 :root[data-cards="immersive"] .slot.dk-open > .card.photo.dk-top { box-shadow: none; }
 /* Immersive: the slab is the photo's own colours, so a past one greys as a whole, kept opaque. */
 :root[data-cards="immersive"] .card.photo.past { filter: grayscale(1) brightness(0.8); }
