@@ -390,11 +390,10 @@ async function leave(ev) {
 function flipKey(el) {
   const day = el.closest(".day")?.dataset.day || "";
   if (el.classList.contains("day-h")) return `h|${day}`;
-  if (el.classList.contains("free-run")) return `f|${el.textContent}`;
   const id = el.querySelector(":scope > .card")?.dataset.id;
   return id ? `e|${id}` : `m|${day}|${el.classList[0]}|${el.classList[1] || ""}`;
 }
-const FLIP = ".day-h, .free-run, .cards > li";
+const FLIP = ".day-h, .cards > li";
 function renderSmooth() {
   if (reduceMotion()) { render(true); return; }
   const before = new Map();

@@ -279,7 +279,7 @@ test("a multi-day all-day event appears once, on its first day in range", async 
   await page.waitFor("document.querySelector('.day.today')");
 });
 
-test("consecutive free days collapse into one row", async () => {
+test("free days are left out, in Week and Month alike", async () => {
   // Hide every calendar except Family: only Sun (dinner) and Fri/Sat (trip) keep events.
   await page.click("#acctBtn");
   for (const name of ["Work", "Personal"]) {
@@ -287,8 +287,17 @@ test("consecutive free days collapse into one row", async () => {
     await page.click(`label[for="${id}"]`);
   }
   await page.key("Escape");
-  const free = await page.eval("[...document.querySelectorAll('.free-run .fr-days')].map((e) => e.textContent)");
-  assert.deepEqual(free, ["17–19 Nov"]);
+  // No "Nothing planned" bar between days: Tue to Thu are simply not listed.
+  const week = (await page.state()).days;
+  assert.deepEqual(week, ["Sun Nov 15 2026", "Mon Nov 16 2026", "Fri Nov 20 2026", "Sat Nov 21 2026"]);
+  assert.equal(await page.eval("document.querySelectorAll('.agenda > :not(.day)').length"), 0);
+  await page.key("m");
+  await page.waitFor("document.querySelector('#stage').dataset.view === 'month'");
+  const month = (await page.state()).days;
+  assert.deepEqual(month.filter((d) => week.includes(d)), week);
+  assert.equal(await page.eval("document.querySelectorAll('.agenda > :not(.day)').length"), 0);
+  await page.key("w");
+  await page.waitFor("document.querySelector('#stage').dataset.view === 'week'");
   assert.equal(await page.eval("document.querySelector('.day.today .day-empty').textContent"), "Nothing planned today");
   // An empty today keeps its Now line, with the sun (10 AM).
   assert.deepEqual(await page.eval("[...document.querySelectorAll('.day.today .cards > li')].map((li) => li.className)"), ["now-mark st-first st-last", "day-empty"]);

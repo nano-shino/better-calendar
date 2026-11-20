@@ -8,7 +8,7 @@ let page;
 before(async () => { page = await launch(); await page.goto("?mock"); });
 after(async () => { assert.deepEqual(page.errors, [], "no console errors"); await page.close(); });
 
-const firstDay = () => page.eval("document.querySelector('.day, .free-run') && (document.querySelector('.day')?.dataset.day)");
+const firstDay = () => page.eval("document.querySelector('.day')?.dataset.day");
 
 test("opens on the current week with the right title and hash", async () => {
   const s = await page.state();
@@ -55,7 +55,7 @@ test("switching between Week and Month swaps in place: today's cards don't move"
 test("fast clicks on Next are never lost (no overlay blocks input mid-animation)", async () => {
   const { x, y } = await page.center("#nextBtn");
   for (let i = 0; i < 4; i++) { await page.clickAt(x, y); await sleep(60); }
-  await page.waitFor("document.querySelector('.day')?.dataset.day === 'Sun Dec 13 2026' || document.querySelector('.free-run')");
+  await page.waitFor("(() => { const d = document.querySelector('.day')?.dataset.day; return d ? new Date(d) >= new Date('Dec 13 2026') : !!document.querySelector('.agenda-empty'); })()");
   await sleep(300);
   assert.equal(await page.eval("document.querySelector('#title').textContent"), "December 2026");
 });
@@ -97,7 +97,7 @@ test("the title animates only when its words change", async () => {
   await page.settle();
   const titleAnimating = () => page.eval("document.getElementById('title').getAnimations().length > 0");
   await page.key("ArrowRight"); // Nov 22–28: still "November 2026"
-  await page.waitFor("document.querySelector('.day, .free-run')?.textContent.includes('22')");
+  await page.waitFor("document.querySelector('.day')?.textContent.includes('22')");
   assert.equal(await titleAnimating(), false);
   await page.key("ArrowRight"); // Nov 29 – Dec 5
   await page.waitFor("document.getElementById('title').textContent === 'Nov – Dec 2026'");

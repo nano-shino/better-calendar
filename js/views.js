@@ -68,30 +68,13 @@ export function renderList(days, events, ctx, mode) {
   }
   const isLead = (e) => !e.seriesId || mode === "day" || lead.get(e.seriesId)?.id === e.id;
 
-  let freeRun = [];
-  const flushFree = () => {
-    if (!freeRun.length) return;
-    const a = freeRun[0], b = freeRun[freeRun.length - 1];
-    const label = freeRun.length === 1
-      ? `${fmt.dow.format(a)} ${a.getDate()}`
-      : a.getMonth() === b.getMonth()
-        ? `${a.getDate()}–${b.getDate()} ${fmt.monthShort.format(a)}`
-        : `${fmt.monthShort.format(a)} ${a.getDate()} – ${fmt.monthShort.format(b)} ${b.getDate()}`;
-    root.append(h("div", { class: `free-run${b < today ? " past" : ""}` },
-      h("span", { class: "fr-days", text: label }), h("span", { class: "fr-txt", text: "Nothing planned" })));
-    freeRun = [];
-  };
-
   for (const day of days) {
     // Multi-day all-day events are listed once: on their first day in this range.
     const list = eventsOn(day, events).filter((e) => !e.allDay || sameDay(day, e.start < rangeStart ? rangeStart : e.start));
     const isToday = sameDay(day, today);
-    // The Completed tab lists only days with something done: no free days, no forced today.
-    if (!list.length && (!isToday || ctx.completed)) {
-      if (mode === "week" && !ctx.completed) freeRun.push(day);
-      continue;
-    }
-    flushFree();
+    // Free days are left out in every view (the jump in dates says enough); today
+    // always shows, for its Now line, except on the Completed tab.
+    if (!list.length && (!isToday || ctx.completed)) continue;
     shown++;
 
     const group = h("div", { class: `day${isToday ? " today" : ""}${day < today ? " past" : ""}`, dataset: { day: day.toDateString() } });
@@ -157,7 +140,6 @@ export function renderList(days, events, ctx, mode) {
     group.append(head, ol);
     root.append(group);
   }
-  flushFree();
 
   // ctx.empty: signed out, no calendar connected yet. Empty days would read
   // as "you have nothing planned", so show only the note.

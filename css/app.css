@@ -534,15 +534,6 @@ a.link-btn { text-decoration: none; }
 }
 .c-thumb .ph { z-index: 0; }
 
-/* Runs of free days collapse into one quiet line */
-.free-run {
-  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
-  padding: 14px 0; border-top: 1px solid var(--hair); font-size: 13.5px;
-}
-.agenda > .free-run:first-child { border-top: 0; }
-.fr-days { font-weight: 500; color: var(--ink-2); min-width: 76px; }
-.fr-txt { color: var(--ink-3); }
-.free-run.past .fr-days { color: var(--ink-3); }
 .day-empty { padding-top: 14px; }
 
 /* Panel for an event without a photo: a slim band instead of a big empty block */
@@ -578,7 +569,6 @@ a.link-btn { text-decoration: none; }
   .dh-dow { font-size: 13px; }
   .agenda:not(.mode-day) .dh-mon { display: none; }
   .day.today .dh-dow { font-weight: 600; }
-  .free-run { padding: 12px 0; }
   .c-thumb { width: 60px; height: 46px; }
   .panel::before {
     content: ""; position: absolute; top: 8px; left: 50%; z-index: 5;
@@ -619,9 +609,6 @@ a.link-btn { text-decoration: none; }
 }
 .c-title-untitled, .pv-title-untitled { color: var(--ink-2); }
 .pv-hidden-note { margin: 0; font-size: 13.5px; color: var(--ink-2); }
-/* Free-day rows use the same date column as day groups */
-.free-run { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 0 24px; align-items: baseline; }
-.fr-days { min-width: 0; white-space: nowrap; }
 /* Live progress bar: rounded, inset to the card's corners */
 .card.live::before { left: 14px; bottom: 6px; height: 3px; border-radius: 3px; width: calc(var(--progress) * (100% - 28px)); }
 /* Search box: no browser clear button */
@@ -637,7 +624,6 @@ a.link-btn { text-decoration: none; }
 }
 @media (max-width: 720px) {
   .c-tile { width: 60px; height: 46px; }
-  .free-run { grid-template-columns: minmax(0, 1fr); gap: 2px; }
   .wc-long { display: none; }
   .wc-short { display: inline; }
   .panel.closing { animation-name: sheet-out; }

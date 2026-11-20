@@ -43,8 +43,8 @@ test("Done in the panel hides the event and the Completed tab lists it", async (
   assert.deepEqual(await titles(), ["Coffee with Alex"]);
   const sel = await cardSel("Coffee with Alex");
   assert.match(await page.eval(`document.querySelector('${sel}').getAttribute('aria-label')`), /, done$/);
-  // No Now line or free days on the Completed tab: only what was done.
-  assert.equal(await page.eval("document.querySelectorAll('.now-mark, .free-run').length"), 0);
+  // No Now line on the Completed tab: only what was done.
+  assert.equal(await page.eval("document.querySelectorAll('.now-mark').length"), 0);
 
   // Not done from the panel puts it back with your plans.
   await open("Coffee with Alex");
