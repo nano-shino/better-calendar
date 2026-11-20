@@ -139,3 +139,23 @@ test("uploading an image sets it as the event's photo", async () => {
   await page.waitFor("document.querySelector('.pv-credit')?.textContent === 'Your photo'");
   await closeWithEsc();
 });
+
+test("Remove photo hides an automatic photo for every repeat, and it can come back", async () => {
+  const hasPhoto = () => page.eval("[...document.querySelectorAll('.card')].filter((c) => c.querySelector('.c-title').textContent === 'Gym').map((c) => !!c.querySelector('.c-art, .c-thumb'))");
+  assert.ok((await hasPhoto()).every(Boolean), "Gym starts with its automatic photo");
+  await page.click(await cardSel("Gym"));
+  await page.waitFor("document.querySelector('.pk-remove')");
+  assert.equal(await page.eval("document.getElementById('scope-series').checked"), true);
+  await page.click(".pk-remove");
+  await page.waitFor("document.querySelector('.pk-status')?.textContent.startsWith('Photo removed')");
+  assert.equal(await page.eval("document.querySelector('.pv-photo').classList.contains('is-empty')"), true);
+  assert.equal(await page.eval("document.querySelector('.pk-src').textContent"), "You removed the photo for every repeat");
+  assert.equal(await page.eval("!!document.querySelector('.pk-remove')"), false, "nothing left to remove");
+  const after = await hasPhoto();
+  assert.ok(after.length > 1 && !after.some(Boolean), "no Gym card has a photo");
+  await page.click(".pk-actions .link-btn:not(.pk-remove)"); // Use the automatic photo
+  await page.waitFor("document.querySelector('.pk-status')?.textContent === 'Back to the automatic photo'");
+  await page.waitFor("!document.querySelector('.pv-photo').classList.contains('is-empty')");
+  assert.ok((await hasPhoto()).every(Boolean), "the automatic photo is back");
+  await closeWithEsc();
+});

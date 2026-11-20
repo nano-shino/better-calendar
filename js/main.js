@@ -623,7 +623,7 @@ function openPop() {
     kids.push(h("section", { class: "pa kw" },
       h("p", { class: "pa-note", text: "Keyword photos" }),
       ...prof.rules.keywords.map((k) => h("div", { class: "kw-row" },
-        h("span", { class: "kw-word", text: `“${k.word}”` }),
+        h("span", { class: "kw-word", text: `“${k.word}”${k.pick?.type === "none" ? " · no photo" : ""}` }),
         h("button", { class: "link-btn", type: "button", text: "Remove", onclick: async () => { await removeKeyword(k.word).catch((e) => toast(e.message)); render(true); openPop(); } })))));
   }
   // Advanced: choices most people never need, folded away until asked for.

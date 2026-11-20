@@ -2,6 +2,7 @@
 // Order: your choice for the event > for the repeating series > keyword match >
 // image link in the description > a hand-checked photo when the title clearly
 // names a kind of event (gym, flight, dinner...). Anything else gets no photo.
+// A choice can also be "no photo" ({ type: "none" }), which hides the later sources.
 
 import { getProfile, getPhoto, putPhoto, deletePhoto, update } from "./store.js";
 import { hash, loadJSON, saveJSON } from "./util.js";
@@ -140,7 +141,8 @@ export const resetMemo = () => memo.clear();
 
 // Whether this event will get a photo, known without waiting for any download.
 export function expectsPhoto(ev) {
-  if (ruleFor(ev)) return true;
+  const rule = ruleFor(ev);
+  if (rule) return rule.pick?.type !== "none";
   if (imageFromDescription(ev.description)) return true;
   if (getProfile().autoPhotos === false) return false;
   const theme = themeFor(ev);
@@ -171,6 +173,7 @@ async function fromPick(pick) {
 
 async function resolve(ev) {
   const rule = ruleFor(ev);
+  if (rule?.pick?.type === "none") return null;
   if (rule) {
     const p = await fromPick(rule.pick);
     if (p) return p;
@@ -216,6 +219,10 @@ export function choose(ev, scope, pick, word) {
     }
   });
 }
+
+export const NO_PHOTO = Object.freeze({ type: "none" });
+// Hides the photo, including an automatic one or one from the description.
+export const removePhoto = (ev, scope, word) => choose(ev, scope, { ...NO_PHOTO }, word);
 
 export function clearChoice(ev) {
   const rule = ruleFor(ev);

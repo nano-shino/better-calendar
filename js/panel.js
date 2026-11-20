@@ -1,7 +1,7 @@
 // Event detail sheet with the photo picker.
 import { h, $, fmt, timeRange, duration, descriptionText, linkify, addDays, sameDay } from "./util.js";
 import { paintPhoto } from "./views.js";
-import { photoFor, ruleFor, autoQuery, search, choose, clearChoice, upload, wordsOf, themeFor, expectsPhoto } from "./photos.js";
+import { photoFor, ruleFor, autoQuery, search, choose, clearChoice, removePhoto, upload, wordsOf, themeFor, expectsPhoto } from "./photos.js";
 import { getProfile } from "./store.js";
 
 let panel, scrim, current = null, ctx = null;
@@ -149,6 +149,11 @@ function sourceLabel(ev, rule) {
     const theme = themeFor(ev);
     if (theme && getProfile().autoPhotos !== false) return `Automatic, because the title says “${theme.label}”`;
     return "No photo yet. Pick one below.";
+  }
+  if (rule.pick?.type === "none") {
+    if (rule.scope === "event") return "You removed the photo for this event";
+    if (rule.scope === "series") return "You removed the photo for every repeat";
+    return `No photo, because of your keyword “${rule.word}”`;
   }
   if (rule.scope === "event") return "You chose this for this event";
   if (rule.scope === "series") return "You chose this for every repeat";
@@ -327,6 +332,14 @@ function buildPicker(ev, rule, photo, credit, message = "") {
     status.textContent = "Saving…";
     try { await clearChoice(ev); ctx.changed(); build(ev, true, "Back to the automatic photo"); } catch (err) { status.textContent = err.message; }
   } }) : null;
+  // Uses the scope above, like picking a photo does.
+  const remove = expectsPhoto(ev) ? h("button", { type: "button", class: "link-btn pk-remove", text: "Remove photo", onclick: async () => {
+    const s = getScope();
+    if (s === "keyword" && !keyword.value.trim()) { keyword.focus(); status.textContent = "Type a word first."; return; }
+    status.textContent = "Saving…";
+    try { await removePhoto(ev, s, keyword.value); ctx.changed(); build(ev, true, ctx.signedIn() ? "Photo removed" : "Photo removed for now. Sign in to keep it."); }
+    catch (err) { status.textContent = err.message; }
+  } }) : null;
 
   const section = h("section", { class: "picker", "aria-label": "Photo" },
     h("div", { class: "pk-head" }, h("h3", { text: "Photo" }), h("span", { class: "pk-src", text: sourceLabel(ev, rule) })),
@@ -335,7 +348,7 @@ function buildPicker(ev, rule, photo, credit, message = "") {
     results,
     more,
     file, drop,
-    h("div", { class: "pk-foot" }, status, reset),
+    h("div", { class: "pk-foot" }, status, h("span", { class: "pk-actions" }, remove, reset)),
     h("p", { class: "fine", text: "Suggested photos come from Openverse and are Creative Commons licensed." }));
   runSearch();
   return section;
